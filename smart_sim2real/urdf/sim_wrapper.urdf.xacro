@@ -1,0 +1,91 @@
+<?xml version="1.0"?>
+<robot name="smart_robot" xmlns:xacro="http://ros.org/wiki/xacro">
+    <xacro:arg name="sim" default="true" />
+    <xacro:arg name="god_mode" default="false" />
+    <xacro:arg name="use_3d_lidar" default="false" />
+    <xacro:arg name="use_arm" default="true" />
+
+    <xacro:include filename="$(find smart_master)/urdf/full_system.urdf.xacro" />
+    <!-- connection macros for Gazebo plugins (which we cut from the base) -->
+    <xacro:include filename="$(find ugv_tracked_description)/urdf/sensors/plugins.urdf.xacro" />
+    <xacro:include filename="$(find ugv_tracked_description)/urdf/controllers/diff_drive.urdf.xacro" />
+
+    <!-- Gazebo plugin only for simulation assembly -->
+    <xacro:if value="$(arg use_arm)">
+        <gazebo>
+            <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+                <!-- load controllers from the new common config -->
+                <parameters>$(find smart_moveit_config)/config/ros2_controllers.yaml</parameters>
+                <!-- Redirect topic for the smart mixer (so the arm doesn't shake and wheels are present) -->
+                <ros>
+                    <remapping>/joint_states:=/arm_joint_states</remapping>
+                </ros>
+            </plugin>
+        </gazebo>
+    </xacro:if>
+
+    <xacro:unless value="${str(use_3d).strip().lower() == 'true'}">
+        <gazebo reference="laser">
+            <sensor name="gpu_lidar" type="gpu_lidar">
+                <topic>scan</topic>
+                <gz_frame_id>laser</gz_frame_id>
+                <update_rate>10</update_rate>
+                <always_on>true</always_on>
+                <visualize>true</visualize>
+                <lidar>
+                    <scan>
+                        <horizontal>
+                            <samples>360</samples>
+                            <resolution>1</resolution>
+                            <min_angle>-3.1416</min_angle>
+                            <max_angle>3.1416</max_angle>
+                        </horizontal>
+                    </scan>
+                    <range>
+                        <min>0.08</min>
+                        <max>12.0</max>
+                        <resolution>0.01</resolution>
+                    </range>
+                </lidar>
+            </sensor>
+        </gazebo>
+    </xacro:unless>
+
+    <!-- Gazebo 3d lidar plugin -->
+    <xacro:if value="${str(use_3d).strip().lower() == 'true'}">
+        <gazebo reference="lidar3d_link">
+            <sensor type="gpu_lidar" name="lidar3d_sensor">
+                <topic>lidar3d</topic> 
+                <gz_frame_id>lidar3d_link</gz_frame_id>
+                <pose>0 0 0 0 0 0</pose>
+                <always_on>true</always_on>
+                <visualize>false</visualize> 
+                <update_rate>10</update_rate>
+                <lidar>
+                    <scan>
+                        <horizontal>
+                            <samples>720</samples>
+                            <resolution>1</resolution>
+                            <min_angle>-3.14159</min_angle>
+                            <max_angle>3.14159</max_angle>
+                        </horizontal>
+                        <vertical>
+                            <samples>16</samples>
+                            <resolution>1</resolution>
+                            <min_angle>-0.261799</min_angle> 
+                            <max_angle>0.261799</max_angle>
+                        </vertical>
+                    </scan>
+                    <range>
+                        <min>0.15</min>
+                        <max>10.0</max>
+                        <resolution>0.01</resolution>
+                    </range>
+                </lidar>
+            </sensor>
+        </gazebo>
+    </xacro:if>
+    <!-- launch plugins for the chassis in Gazebo -->
+    <!-- (Variables wheel_pos_y and wheel_radius will be inherited from full_system -> ugv_base -> ugv_properties) -->
+    <xacro:diff_drive_controller wheel_separation="${wheel_pos_y * 2}" wheel_radius="${wheel_radius}" god_mode="$(arg god_mode)"/>
+</robot>

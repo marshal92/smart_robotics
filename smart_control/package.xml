@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>smart_control</name>
+  <version>1.0.0</version>
+  <description>Mission management, FSM, and tactical control</description>
+  <maintainer email="proskurin1408@gmail.com">Oleksandr Proskurin</maintainer>
+  <license>GPL-3.0-or-later</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>slam_toolbox</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>visualization_msgs</depend>
+  <depend>geometry_msgs</depend>
+  
+  <depend>smart_interfaces</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

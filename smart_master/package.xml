@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>smart_master</name>
+  <version>1.0.0</version>
+  <description>Master Orchestrator for Smart Robotics</description>
+  <maintainer email="proskurin1408@gmail.com">Oleksandr Proskurin</maintainer>
+  <license>GPL-3.0-or-later</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  
+  <!-- Main dependencies -->
+  <exec_depend>robot_localization</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>rosbridge_server</exec_depend>
+  <exec_depend>pointcloud_to_laserscan</exec_depend>
+  <exec_depend>sllidar_ros2</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>joint_state_publisher</exec_depend>
+  <exec_depend>xacro</exec_depend>
+
+  <!-- Dependencies for the smart modules -->
+  <exec_depend>smart_sim2real</exec_depend>
+  <exec_depend>smart_nav</exec_depend>
+  <exec_depend>smart_control</exec_depend>
+  <exec_depend>smart_server</exec_depend>
+  <exec_depend>smart_radiation</exec_depend>
+  <exec_depend>smart_plugins</exec_depend>
+
+  <!-- Dependencies for the UGV platform -->
+  <exec_depend>ugv_tracked_bringup</exec_depend>
+  <exec_depend>ugv_tracked_description</exec_depend>  
+
+  <!-- Dependencies for the manipulator description --> 
+  <exec_depend>manipulator_description</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

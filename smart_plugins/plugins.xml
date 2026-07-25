@@ -1,0 +1,5 @@
+<library path="smart_plugins_core">
+  <class type="smart_plugins::RadiationLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>Custom Radiation Costmap Layer.</description>
+  </class>
+</library>
