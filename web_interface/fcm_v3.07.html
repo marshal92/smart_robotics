@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FCM Tactical Commander V3.06</title>
+    <script src="eventemitter2.min.js"></script>
+    <script src="roslib.min.js"></script>
+        <style>
+        :root {
+            --bg-color: #121212; --panel-bg: #1e1e1e; --text: #e0e0e0;
+            --accent: #1976d2; --green: #0faa14; --red: #d32f2f; --orange: #f57c00; --dark-bg: #2a2a2a;
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg-color); color: var(--text); padding: 20px; margin: 0; }
+        
+        /* Header & Telemetry HUD */
+        .header { display: flex; justify-content: space-between; align-items: center; background: var(--panel-bg); padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .hud-panel { display: flex; gap: 20px; background: #111; padding: 10px 20px; border-radius: 6px; border: 1px solid #333;}
+        .hud-item { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 80px;}
+        .hud-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px;}
+        .hud-val { font-size: 18px; font-weight: bold; color: var(--accent); font-family: monospace;}
+        
+        .conn-box { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        input[type="text"], input[type="number"], input[type="range"] { background: #333; border: 1px solid #555; color: white; padding: 8px 12px; border-radius: 4px; font-size: 14px; }
+        .btn-connect { background: var(--accent); color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        #status { font-weight: bold; padding: 5px 10px; border-radius: 4px; background: #424242; }
+        
+        /* Blocks & Tabs */
+        .block-container { background: var(--dark-bg); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #444; }
+        .block-title { margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px;}
+        .tab-btn { background: #333; color: #aaa; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: 0.2s; white-space: nowrap;}
+        .tab-btn.active { background: var(--accent); color: white; box-shadow: 0 0 8px rgba(25, 118, 210, 0.5);}
+        .tab-btn:hover:not(.active) { background: #444; }
+        .tab-content { display: none; background: var(--panel-bg); padding: 20px; border-radius: 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
+        .tab-content.active { display: block; }
+        
+        /* Grids and Buttons */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+        .cmd-btn { padding: 15px; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; color: white; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: 0.1s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; position: relative;}
+        .cmd-btn span { font-size: 11px; opacity: 0.8; font-weight: normal; text-align: center;}
+        .cmd-btn:active { transform: scale(0.95); }
+        .c-green { background: var(--green); } .c-blue { background: var(--accent); } .c-red { background: var(--red); } .c-orange { background: var(--orange); } .c-gray { background: #555; } .c-purple { background: #7b1fa2; }
+
+        /* Teleop Layout & D-Pad */
+        .teleop-layout { display: flex; align-items: center; justify-content: center; gap: 40px; flex-wrap: wrap; }
+        .side-panel { display: flex; flex-direction: column; gap: 15px; min-width: 180px; }
+        .center-panel { display: flex; flex-direction: column; align-items: center; gap: 15px;}
+        
+        .d-pad-container { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px; background: #222; border-radius: 8px; border: 1px solid #444;}
+        .d-pad-row { display: flex; gap: 10px; justify-content: center; }
+        .d-pad-btn { width: 70px; height: 70px; background: #444; color: white; border: none; border-radius: 12px; font-size: 24px; font-weight: bold; cursor: pointer; user-select: none; box-shadow: 0 6px 0 #222, 0 8px 10px rgba(0,0,0,0.5); transition: 0.1s;}
+        .d-pad-btn:active, .d-pad-btn.active-pad { transform: translateY(4px); box-shadow: 0 2px 0 #222, 0 4px 6px rgba(0,0,0,0.5); background: var(--accent); }
+        .shadow-pad .d-pad-btn:active, .shadow-pad .d-pad-btn.active-pad { background: var(--purple); }
+
+        /* Speed Slider */
+        .speed-control { background: #222; padding: 10px 20px; border-radius: 8px; border: 1px solid #444; text-align: center; width: 220px;}
+        .speed-control label { font-size: 12px; color: #aaa; display: block; margin-bottom: 5px; }
+        .speed-control input[type=range] { width: 100%; cursor: pointer; }
+
+        /* Creator Panel */
+        .creator-panel { background: #222; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed #555;}
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        .input-group label { font-size: 12px; color: #aaa; }
+        .btn-action { color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; height: 35px; }
+        .del-btn { position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center;}
+        .del-btn:hover { background: red; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h2>FCM Terminal V3.07</h2>
+        
+        <div class="hud-panel">
+            <div class="hud-item">
+                <span class="hud-label">FSM State</span>
+                <span class="hud-val" id="hud-fsm" style="color: var(--accent);">UNKNOWN</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Linear Vel</span>
+                <span class="hud-val" id="hud-speed">0.00 m/s</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Radiation</span>
+                <span class="hud-val" id="hud-rad" style="color: var(--orange);">--- µSv/h</span>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Nav Status</span>
+                <span class="hud-val" id="hud-nav" style="color: #aaa;">IDLE</span>
+            </div>
+        </div>
+
+        <div class="conn-box">
+            <input type="text" id="ws_url" value="ws://127.0.0.1:9090">
+            <button class="btn-connect" onclick="connectROS()">Connect</button>
+            <div id="status">Disconnected 🔴</div>
+        </div>
+    </div>
+
+    <div class="block-container">
+        <h3 class="block-title">Block 1: Core Systems & Teleop</h3>
+        <div class="tabs" id="tabs-block1">
+            <button class="tab-btn active" onclick="toggleTab('block1', 'tab-manager', this)">Mission Manager</button>
+            <button class="tab-btn" onclick="toggleTab('block1', 'tab-teleop', this)">Direct Teleop (Base)</button>
+            <button class="tab-btn" onclick="toggleTab('block1', 'tab-shadow', this)">Shadow Control</button>
+        </div>
+
+        <div id="tab-manager" class="tab-content active" data-group="block1">
+            <div class="grid">
+                <button class="cmd-btn c-red" onclick="pubSystem('stop')">🛑 STOP <span>Halt everything</span></button>
+                <button class="cmd-btn c-green" onclick="pubSystem('start_213')">Room 213 <span>Load 213 config</span></button>
+                <button class="cmd-btn c-green" onclick="pubSystem('start_kitchen')">Kitchen <span>Load kitchen config</span></button>
+                <button class="cmd-btn c-green" onclick="pubSystem('start_shelter_zero')">Shelter Zero <span>Launch default seq</span></button>
+                <button class="cmd-btn c-green" onclick="pubSystem('start_freeride')">Freeride <span>Manual mode</span></button>
+                <button class="cmd-btn c-gray" onclick="pubSystem('clear_costmaps')">Clear Costmaps <span>Reset nav data</span></button>
+                <button class="cmd-btn c-gray" onclick="pubSystem('rad_on')">Rad Map ON <span>Enable radiation sim</span></button>
+                <button class="cmd-btn c-gray" onclick="pubSystem('rad_off')">Rad Map OFF <span>Disable radiation sim</span></button>
+                <button id="resume-btn" onclick="pubResume()" style="background-color: var(--orange); color: white; padding: 10px 20px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-left: 15px;"> RESUME FSM </button>
+            </div>
+        </div>
+
+        <div id="tab-teleop" class="tab-content" data-group="block1">
+            <div class="teleop-layout" style="display: flex; justify-content: center; gap: 40px; align-items: flex-start;">
+                <div style="display: flex; flex-direction: column; gap: 15px; align-items: center; max-width: 400px;">
+                    <div style="width: 100%; aspect-ratio: 4/3; background: #000; border: 2px solid #444; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                        <img id="camera-stream" src="" alt="NO SIGNAL" style="width: 100%; height: 100%; object-fit: cover; color: red; font-weight: bold; font-family: monospace;">
+                    </div>
+                    <div class="d-pad-container" style="width: 100%; box-sizing: border-box;">
+                        <div style="color: #aaa; margin-bottom: 10px; text-align: center;">/cmd_vel (WASD)</div>
+                        <div class="d-pad-row">
+                            <button id="pad-base-w" class="d-pad-btn" onmousedown="padDown('base', 1, 0)" onmouseup="padUp('base')" ontouchstart="padDown('base', 1, 0)" ontouchend="padUp('base')">W</button>
+                        </div>
+                        <div class="d-pad-row">
+                            <button id="pad-base-a" class="d-pad-btn" onmousedown="padDown('base', 0, 1)" onmouseup="padUp('base')" ontouchstart="padDown('base', 0, 1)" ontouchend="padUp('base')">A</button>
+                            <button id="pad-base-s" class="d-pad-btn" onmousedown="padDown('base', -1, 0)" onmouseup="padUp('base')" ontouchstart="padDown('base', -1, 0)" ontouchend="padUp('base')">S</button>
+                            <button id="pad-base-d" class="d-pad-btn" onmousedown="padDown('base', 0, -1)" onmouseup="padUp('base')" ontouchstart="padDown('base', 0, -1)" ontouchend="padUp('base')">D</button>
+                        </div>
+                    </div>
+                    <div class="speed-control" style="width: 100%; box-sizing: border-box;">
+                        <label>Max Speed: <span id="speed-val-base" style="color:white; font-weight:bold;">0.5</span> m/s</label>
+                        <input type="range" id="slider-base" min="0.1" max="2.0" step="0.1" value="0.5" oninput="document.getElementById('speed-val-base').innerText = this.value">
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; justify-content: center;">
+                    <button class="cmd-btn c-red" style="height: 100px; width: 160px;" onclick="pubTwist(cmdVelTopic, 0, 0)">
+                        🛑 STOP BASE <span>Emergency Break</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="tab-shadow" class="tab-content" data-group="block1">
+            <div class="teleop-layout" style="display: flex; justify-content: center; gap: 40px; align-items: flex-start;">
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <div class="d-pad-container shadow-pad">
+                        <div style="color: #cddc39; margin-bottom: 10px;">/cmd_vel_shadow (WASD)</div>
+                        <div class="d-pad-row">
+                            <button id="pad-shadow-w" class="d-pad-btn" onmousedown="padDown('shadow', 1, 0)" onmouseup="padUp('shadow')" ontouchstart="padDown('shadow', 1, 0)" ontouchend="padUp('shadow')">W</button>
+                        </div>
+                        <div class="d-pad-row">
+                            <button id="pad-shadow-a" class="d-pad-btn" onmousedown="padDown('shadow', 0, 1)" onmouseup="padUp('shadow')" ontouchstart="padDown('shadow', 0, 1)" ontouchend="padUp('shadow')">A</button>
+                            <button id="pad-shadow-s" class="d-pad-btn" onmousedown="padDown('shadow', -1, 0)" onmouseup="padUp('shadow')" ontouchstart="padDown('shadow', -1, 0)" ontouchend="padUp('shadow')">S</button>
+                            <button id="pad-shadow-d" class="d-pad-btn" onmousedown="padDown('shadow', 0, -1)" onmouseup="padUp('shadow')" ontouchstart="padDown('shadow', 0, -1)" ontouchend="padUp('shadow')">D</button>
+                        </div>
+                    </div>
+                    <div class="speed-control" style="width: 100%; box-sizing: border-box;">
+                        <label>Max Speed: <span id="speed-val-shadow" style="color:white; font-weight:bold;">0.5</span> m/s</label>
+                        <input type="range" id="slider-shadow" min="0.1" max="2.0" step="0.1" value="0.5" oninput="document.getElementById('speed-val-shadow').innerText = this.value">
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <button class="cmd-btn c-red" style="height: 80px; width: 160px;" onclick="pubOperator('clear')">
+                        CLEAR <span>Stop shadow & robot</span>
+                    </button>
+                    <button class="cmd-btn c-blue" style="height: 80px; width: 160px;" onclick="pubOperator('execute')">
+                        EXECUTE <span>Execute route</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+    <div class="block-container">
+        <h3 class="block-title">Block 2: Navigation & Waypoints</h3>
+        
+        <div class="creator-panel">
+            <div style="display:flex; gap:10px; flex-wrap: wrap; align-items: flex-end;">
+                <div class="input-group">
+                    <label>Waypoint Name</label>
+                    <input type="text" id="m_name" placeholder="Target A">
+                </div>
+                <div class="input-group">
+                    <label>X (m)</label>
+                    <input type="number" id="m_x" value="0.0" step="0.1" style="width: 70px;">
+                </div>
+                <div class="input-group">
+                    <label>Y (m)</label>
+                    <input type="number" id="m_y" value="0.0" step="0.1" style="width: 70px;">
+                </div>
+                <div class="input-group">
+                    <label>Yaw (rad)</label>
+                    <input type="number" id="m_yaw" value="0.0" step="0.1" style="width: 70px;">
+                </div>
+                <button class="btn-action" onclick="addSingleMissionBtn()" style="background: var(--accent);">Save Point</button>
+            </div>
+        </div>
+
+        <div class="grid" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed #444;">
+            <button class="cmd-btn c-red" onclick="pubTactical('cancel', 0, 0, 0)">🛑 CANCEL NAV <span>Stop Movement</span></button>
+            <button class="cmd-btn c-orange" onclick="pubPayload('mock_sample')">Sampling Protocol <span>Execute drill seq</span></button>
+        </div>
+
+        <div class="grid" id="grid-waypoints">
+            <span style="color: #aaa; font-size: 14px;">Ожидание синхронизации базы данных с роботом...</span>
+        </div>
+    </div>
+
+    <div class="block-container">
+        <h3 class="block-title">Block 3: Mechanisms</h3>
+        <div class="grid">
+            <button class="cmd-btn c-orange" onclick="pubBool(cmdLightTopic, true)">Turn Light ON <span>LED Matrix</span></button>
+            <button class="cmd-btn c-gray" onclick="pubBool(cmdLightTopic, false)">Turn Light OFF <span>LED Matrix</span></button>
+        </div>
+    </div>
+
+    <div style="background: #111; padding: 10px; border-radius: 6px; border: 1px solid #333; margin-top: 20px;">
+        <h4 style="margin: 0 0 10px 0; color: #888;">ROS Console Output</h4>
+        <div id="log-box" style="height: 150px; overflow-y: auto; font-family: monospace; font-size: 11px; white-space: pre-wrap;"></div>
+    </div>
+
+<script>
+        let ros = null;
+        // Publishers: Оставляем только Хард-Реалтайм (Группа 1) и новую Единую Шину Команд (Группа 2)
+        let smartCmdTopic = null; 
+        let cmdVelTopic = null, cmdShadowTopic = null, cmdLightTopic = null;
+        
+        // Subscribers: Телеметрия, Камера, Логи, Точки
+        let telemetrySub = null, camSub = null, rosoutSub = null, wpListSub = null;
+
+        // ==========================================
+        // ЯДРО ТЕЛЕУПРАВЛЕНИЯ (CONTROL LOOP 10Hz)
+        // ==========================================
+        let moveState = { up: false, down: false, left: false, right: false };
+        let activeRobotType = null; // 'base' или 'shadow'
+        let teleopInterval = null;
+
+        function startTeleopLoop() {
+            if (teleopInterval) return;
+            teleopInterval = setInterval(() => {
+                if (!activeRobotType || !ros) return;
+                
+                let speed = parseFloat(document.getElementById(`slider-${activeRobotType}`).value);
+                let linear = 0.0; let angular = 0.0;
+                
+                if (moveState.up) linear += speed;
+                if (moveState.down) linear -= speed;
+                if (moveState.left) angular += speed;
+                if (moveState.right) angular -= speed;
+
+                let topic = activeRobotType === 'base' ? cmdVelTopic : cmdShadowTopic;
+                if (topic) {
+                    topic.publish(new ROSLIB.Message({
+                        linear : { x : linear, y : 0.0, z : 0.0 },
+                        angular : { x : 0.0, y : 0.0, z : angular }
+                    }));
+                }
+            }, 100); 
+        }
+
+        function stopTeleopLoop() {
+            if (teleopInterval) { clearInterval(teleopInterval); teleopInterval = null; }
+            if (activeRobotType) {
+                let topic = activeRobotType === 'base' ? cmdVelTopic : cmdShadowTopic;
+                if (topic) pubTwist(topic, 0, 0);
+            }
+        }
+
+        // ==========================================
+        // 1. ИНИЦИАЛИЗАЦИЯ ROS
+        // ==========================================
+        function connectROS() {
+            const url = document.getElementById('ws_url').value;
+            const statusEl = document.getElementById('status');
+            if (ros) ros.close(); 
+            ros = new ROSLIB.Ros({ url : url });
+
+            ros.on('connection', function() {
+                statusEl.innerHTML = "Connected 🟢"; statusEl.style.background = "#1b5e20";
+                
+                // --- ЕДИНАЯ ШИНА КОМАНД ---
+                smartCmdTopic = new ROSLIB.Topic({ 
+                    ros: ros, 
+                    name: '/smart_command', 
+                    messageType: 'smart_interfaces/msg/SmartCommand' 
+                });
+
+                // --- ХАРД-РЕАЛТАЙМ ---
+                cmdVelTopic = new ROSLIB.Topic({ ros : ros, name : '/cmd_vel', messageType : 'geometry_msgs/msg/Twist' });
+                cmdShadowTopic = new ROSLIB.Topic({ ros : ros, name : '/cmd_vel_shadow', messageType : 'geometry_msgs/msg/Twist' });
+                cmdLightTopic = new ROSLIB.Topic({ ros : ros, name : '/cmd_light', messageType : 'std_msgs/msg/Bool' });
+                
+                // --- ТЕЛЕМЕТРИЯ ---
+                telemetrySub = new ROSLIB.Topic({ 
+                    ros : ros, 
+                    name : '/smart_telemetry', 
+                    messageType : 'smart_interfaces/msg/SmartTelemetry' 
+                });
+                
+                telemetrySub.subscribe(function(msg) {
+                    document.getElementById('hud-speed').innerText = msg.linear_speed.toFixed(2) + " m/s";
+                    document.getElementById('hud-rad').innerText = msg.dose_rate.toFixed(1) + " µSv/h";
+                    
+                    let fsmEl = document.getElementById('hud-fsm');
+                    fsmEl.innerText = msg.fsm_state;
+                    if (msg.fsm_state === 'NORMAL') fsmEl.style.color = 'var(--green)';
+                    else if (msg.fsm_state === 'WARNING') fsmEl.style.color = 'var(--orange)';
+                    else if (msg.fsm_state === 'EVACUATING' || msg.fsm_state === 'SAFE_HOLD') fsmEl.style.color = 'var(--red)';
+                    else fsmEl.style.color = 'var(--accent)';
+
+                    document.getElementById('hud-nav').innerText = msg.nav_status;
+                });
+
+                camSub = new ROSLIB.Topic({ ros : ros, name : '/camera/image_raw/compressed', messageType : 'sensor_msgs/msg/CompressedImage' });
+                camSub.subscribe(function(msg) {
+                    document.getElementById('camera-stream').src = "data:image/jpeg;base64," + msg.data;
+                });
+
+                rosoutSub = new ROSLIB.Topic({ ros : ros, name : '/rosout', messageType : 'rcl_interfaces/msg/Log' });
+                rosoutSub.subscribe(function(msg) { addLogMessage(msg); });
+
+                wpListSub = new ROSLIB.Topic({ ros: ros, name: '/waypoints_list', messageType: 'std_msgs/msg/String' });
+                wpListSub.subscribe(function(msg) {
+                    let waypoints = JSON.parse(msg.data);
+                    renderWaypoints(waypoints);
+                });
+            });
+            ros.on('error', function() { statusEl.innerHTML = "Error 🟡"; statusEl.style.background = "#f57f17"; stopTeleopLoop(); });
+            ros.on('close', function() { statusEl.innerHTML = "Disconnected 🔴"; statusEl.style.background = "#b71c1c"; stopTeleopLoop(); });
+        }
+
+        // --- ВЫВОД ЛОГОВ (ROS Console) ---
+        function addLogMessage(msg) {
+            const logBox = document.getElementById('log-box');
+            if(!logBox) return;
+            let color = "#aaa"; let prefix = "[INFO]";
+            if (msg.level === 30) { color = "#ffeb3b"; prefix = "[WARN]"; } 
+            if (msg.level === 40 || msg.level === 50) { color = "#f44336"; prefix = "[ERROR]"; } 
+            const logLine = document.createElement('div');
+            logLine.style.color = color;
+            logLine.innerText = `${prefix} [${msg.name}]: ${msg.msg}`;
+            logBox.appendChild(logLine);
+            logBox.scrollTop = logBox.scrollHeight;
+            if (logBox.children.length > 50) logBox.removeChild(logBox.firstChild);
+        }
+
+        // ==========================================
+        // 2. ОТПРАВКА КОМАНД (Универсальный Роутер)
+        // ==========================================
+        
+        // Главная функция-упаковщик
+        function pubSmartCommand(target_system, command, payloadObj = null) {
+            if (!smartCmdTopic) return;
+            let payloadStr = payloadObj ? JSON.stringify(payloadObj) : "";
+            let msg = new ROSLIB.Message({
+                target_system: target_system,
+                command: command,
+                payload_json: payloadStr
+            });
+            smartCmdTopic.publish(msg);
+            console.log(`[SmartCommand] -> [${target_system}] ${command}`, payloadObj || "");
+        }
+
+        // Обёртки для старых кнопок HTML, чтобы не переписывать UI
+        function pubSystem(cmd) { pubSmartCommand('system', cmd); }
+        function pubPayload(action) { pubSmartCommand('payload', action); }
+        function pubOperator(cmd) { pubSmartCommand('operator', cmd); }
+        function pubResume() { pubSmartCommand('operator', 'RESUME'); }
+        
+        function pubTactical(action, x, y, yaw) {
+            pubSmartCommand('nav', action, { x: parseFloat(x), y: parseFloat(y), yaw: parseFloat(yaw) });
+        }
+
+        // Реалтайм-команды
+        function pubBool(topicVar, state) { if(topicVar) topicVar.publish(new ROSLIB.Message({ data: state })); }
+        function pubTwist(topicVar, linearX, angularZ) {
+            if (!topicVar) return;
+            topicVar.publish(new ROSLIB.Message({
+                linear : { x : linearX, y : 0.0, z : 0.0 },
+                angular : { x : 0.0, y : 0.0, z : angularZ }
+            }));
+        }
+
+        // ==========================================
+        // 3. ЛОГИКА ТЕЛЕУПРАВЛЕНИЯ (WASD / D-Pad)
+        // ==========================================
+        function padDown(robotType, dir, val) {
+            activeRobotType = robotType;
+            if(dir === 'x') { moveState.up = (val > 0); moveState.down = (val < 0); }
+            if(dir === 'z') { moveState.left = (val > 0); moveState.right = (val < 0); }
+            startTeleopLoop();
+        }
+        function padUp(robotType, dir) {
+            if(dir === 'x') { moveState.up = false; moveState.down = false; }
+            if(dir === 'z') { moveState.left = false; moveState.right = false; }
+            if(!moveState.up && !moveState.down && !moveState.left && !moveState.right) stopTeleopLoop();
+        }
+        function setPadHighlight(key, isDown, isBase) {
+            let prefix = isBase ? 'pad-base-' : 'pad-shadow-';
+            let map = { 'w': 'w', 'arrowup': 'w', 's': 's', 'arrowdown': 's', 'a': 'a', 'arrowleft': 'a', 'd': 'd', 'arrowright': 'd' };
+            if(map[key]) {
+                let el = document.getElementById(prefix + map[key]);
+                if(el) isDown ? el.classList.add('active-pad') : el.classList.remove('active-pad');
+            }
+        }
+
+        document.addEventListener('keydown', function(event) {
+            if (event.target.tagName === 'INPUT' || event.repeat) return;
+            let isBaseActive = document.getElementById('tab-teleop').classList.contains('active');
+            let isShadowActive = document.getElementById('tab-shadow').classList.contains('active');
+            if (!isBaseActive && !isShadowActive) return;
+
+            activeRobotType = isBaseActive ? 'base' : 'shadow';
+            let key = event.key.toLowerCase(); let changed = false;
+            
+            if (key === 'w' || key === 'arrowup') { moveState.up = true; changed = true; }
+            if (key === 's' || key === 'arrowdown') { moveState.down = true; changed = true; }
+            if (key === 'a' || key === 'arrowleft') { moveState.left = true; changed = true; }
+            if (key === 'd' || key === 'arrowright') { moveState.right = true; changed = true; }
+
+            if (changed) { event.preventDefault(); setPadHighlight(key, true, isBaseActive); startTeleopLoop(); }
+        });
+
+        document.addEventListener('keyup', function(event) {
+            if (event.target.tagName === 'INPUT') return;
+            let isBaseActive = document.getElementById('tab-teleop').classList.contains('active');
+            let key = event.key.toLowerCase(); let changed = false;
+            if (key === 'w' || key === 'arrowup') { moveState.up = false; changed = true; }
+            if (key === 's' || key === 'arrowdown') { moveState.down = false; changed = true; }
+            if (key === 'a' || key === 'arrowleft') { moveState.left = false; changed = true; }
+            if (key === 'd' || key === 'arrowright') { moveState.right = false; changed = true; }
+            if (changed) { setPadHighlight(key, false, isBaseActive); if(!moveState.up && !moveState.down && !moveState.left && !moveState.right) stopTeleopLoop(); }
+        });
+
+        function toggleTab(groupName, tabId, btnElement) {
+            stopTeleopLoop(); 
+            moveState = { up: false, down: false, left: false, right: false };
+            document.querySelectorAll('.active-pad').forEach(el => el.classList.remove('active-pad'));
+            let contents = document.querySelectorAll(`.tab-content[data-group="${groupName}"]`);
+            let btns = document.getElementById(`tabs-${groupName}`).querySelectorAll('.tab-btn');
+            if (btnElement.classList.contains('active')) return;
+            contents.forEach(el => el.classList.remove('active'));
+            btns.forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btnElement.classList.add('active');
+        }
+
+        // ==========================================
+        // 4. ЛОГИКА ОТРИСОВКИ ТОЧЕК
+        // ==========================================
+        function renderWaypoints(waypoints) {
+            let container = document.getElementById('grid-waypoints');
+            if(!container) return;
+            container.innerHTML = ''; 
+            
+            for (const [name, coords] of Object.entries(waypoints)) {
+                let btn = document.createElement('button');
+                btn.className = "cmd-btn c-blue"; 
+                let infoText = `X:${coords.x.toFixed(2)} Y:${coords.y.toFixed(2)} Yaw:${coords.yaw.toFixed(2)}`;
+                
+                btn.innerHTML = `<div class="del-btn" onclick="event.stopPropagation(); deleteWaypoint('${name}')">✖</div>${name.toUpperCase()} <span>${infoText}</span>`;
+                
+                btn.onclick = () => {
+                    pubSmartCommand('nav', 'go_to_named', { name: name });
+                    console.log(`🚀 Едем на точку ${name.toUpperCase()}`);
+                };
+                
+                container.appendChild(btn);
+            }
+        }
+
+        // Сохранение НОВОЙ точки
+        function addSingleMissionBtn() {
+            let name = document.getElementById('m_name').value.toLowerCase().replace(/\s+/g, '_') || "point_" + Math.floor(Date.now() / 1000);
+            let payload = {
+                name: name,
+                x: parseFloat(document.getElementById('m_x').value),
+                y: parseFloat(document.getElementById('m_y').value),
+                yaw: parseFloat(document.getElementById('m_yaw').value)
+            };
+            
+            pubSmartCommand('waypoints', 'save', payload);
+            document.getElementById('m_name').value = '';
+        }
+
+        // Удаление точки
+        function deleteWaypoint(name) {
+            pubSmartCommand('waypoints', 'delete', { name: name });
+        }
+
+        window.onload = () => { connectROS(); };
+    </script>
+
+</body>
+</html>

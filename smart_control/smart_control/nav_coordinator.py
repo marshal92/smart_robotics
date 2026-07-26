@@ -4,6 +4,8 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseStamped
 from nav2_simple_commander.robot_navigator import BasicNavigator
+from smart_interfaces.msg import SmartCommand
+
 import json
 import time
 import math
@@ -17,8 +19,9 @@ class NavCoordinator(Node):
         self.current_fsm_state = "UNKNOWN"
         self.bt_survival = "" # Here I can later specify the path to the evacuation tree
 
-        self.create_subscription(String, '/tactical_command', self.tactical_cb, 10)
-        self.create_subscription(String, '/system_command', self.system_cb, 10)
+        self.create_subscription(SmartCommand, '/smart_command', self.cmd_cb, 10)
+        #self.create_subscription(String, '/tactical_command', self.tactical_cb, 10)
+        #self.create_subscription(String, '/system_command', self.system_cb, 10)
         self.create_subscription(String, '/fsm_status', self.fsm_cb, 10)
 
         self.get_logger().info('Nav Coordinator activated. Awaiting commands.')
@@ -26,17 +29,25 @@ class NavCoordinator(Node):
     def fsm_cb(self, msg):
         self.current_fsm_state = msg.data
 
-    def system_cb(self, msg):
-        cmd = msg.data.strip().lower().split(':')[0]
-        if cmd in ['stop', 'start_freeride', 'restart']:
-            self.get_logger().warn("[System] Navigation disabled globally. Clearing queues.")
-            self.nav_queue.clear()
-            self.active_task = None
+    def cmd_cb(self, msg):
+        # 1. Глобальные системные остановки
+        if msg.target_system == 'system':
+            cmd = msg.command.strip().lower()
+            if cmd in ['stop', 'start_freeride', 'restart']:
+                self.get_logger().warn("[System] Navigation disabled globally. Clearing queues.")
+                self.nav_queue.clear()
+                self.active_task = None
+            return
 
-    def tactical_cb(self, msg):
-        try:
-            payload = json.loads(msg.data)
-            action = payload.get("action")
+        # 2. Тактические команды навигации
+        if msg.target_system == 'nav':
+            action = msg.command.lower()
+            
+            # Парсим JSON, если он есть
+            payload = {}
+            if msg.payload_json:
+                try: payload = json.loads(msg.payload_json)
+                except Exception as e: self.get_logger().error(f"JSON Error: {e}")
 
             # Cancel and Return to Home are allowed ALWAYS
             if action == "cancel":
@@ -75,10 +86,7 @@ class NavCoordinator(Node):
                 self.active_task = task
                 self.nav_queue.append(task)
                 self.get_logger().info(f"Route added: X={goal_pose.pose.position.x}, Y={goal_pose.pose.position.y}")
-
-        except Exception as e:
-            self.get_logger().error(f"Error parsing JSON: {e}")
-
+    
 def main(args=None):
     rclpy.init(args=args)
     node = NavCoordinator()

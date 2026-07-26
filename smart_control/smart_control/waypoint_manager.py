@@ -3,6 +3,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker, MarkerArray
+from smart_interfaces.msg import SmartCommand
+
 import json
 import os
 import math
@@ -12,10 +14,12 @@ class WaypointManager(Node):
         super().__init__('waypoint_manager')
         
         self.wp_list_pub = self.create_publisher(String, '/waypoints_list', 10)
-        self.tactical_pub = self.create_publisher(String, '/tactical_command', 10)
+        self.cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
+        #self.tactical_pub = self.create_publisher(String, '/tactical_command', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/smart_waypoints_markers', 10)
-        
-        self.create_subscription(String, '/waypoint_command', self.command_cb, 10)
+
+        self.create_subscription(SmartCommand, '/smart_command', self.command_cb, 10)
+        #self.create_subscription(String, '/waypoint_command', self.command_cb, 10)
         
         self.waypoints_dir = os.path.expanduser('~/.ros/smart_data')
         os.makedirs(self.waypoints_dir, exist_ok=True)
@@ -47,11 +51,16 @@ class WaypointManager(Node):
         self.publish_markers()
 
     def command_cb(self, msg):
-        try:
-            payload = json.loads(msg.data)
-            action = payload.get("action")
-            name = payload.get("name", "").lower().replace(" ", "_")
+        payload = {}
+        if msg.payload_json:
+            try: payload = json.loads(msg.payload_json)
+            except: pass
 
+        name = payload.get("name", "").lower().replace(" ", "_")
+
+        # If the command is addressed to the waypoint database
+        if msg.target_system == 'waypoints':
+            action = msg.command
             if action == "save":
                 self.waypoints[name] = {
                     "x": float(payload.get("x", 0.0)),
@@ -69,22 +78,23 @@ class WaypointManager(Node):
                     self.sync_routine()
                     self.get_logger().info(f"Waypoint '{name.upper()}' deleted.")
 
-            elif action == "go_to_named":
-                if name in self.waypoints:
-                    wp = self.waypoints[name]
-                    cmd = {
-                        "action": "go_to",
-                        "x": wp["x"],
-                        "y": wp["y"],
-                        "yaw": wp["yaw"]
-                    }
-                    self.tactical_pub.publish(String(data=json.dumps(cmd)))
-                    self.get_logger().info(f"Robot is heading to waypoint '{name.upper()}'")
-                else:
-                    self.get_logger().warn(f"Waypoint '{name}' not found in database!")
-
-        except Exception as e:
-            self.get_logger().error(f"Error processing command: {e}")
+        # Broadcast: If someone asked to go by name, transfer into coordinates
+        elif msg.target_system == 'nav' and msg.command == 'go_to_named':
+            if name in self.waypoints:
+                wp = self.waypoints[name]
+                
+                cmd_msg = SmartCommand()
+                cmd_msg.target_system = 'nav'
+                cmd_msg.command = 'go_to'
+                cmd_msg.payload_json = json.dumps({
+                    "x": wp["x"],
+                    "y": wp["y"],
+                    "yaw": wp["yaw"]
+                })
+                self.cmd_pub.publish(cmd_msg)
+                self.get_logger().info(f"Translated '{name.upper()}' to Nav coordinates.")
+            else:
+                self.get_logger().warn(f"Waypoint '{name}' not found in database!")
 
     def publish_markers(self):
         msg = MarkerArray()

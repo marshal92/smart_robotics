@@ -59,6 +59,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         world_arg,
+        use_sim_time_arg,
         heartbeat_node,
         sdf_visualizer_node,
         twin_orchestrator_node,

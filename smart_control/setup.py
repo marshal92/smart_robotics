@@ -28,6 +28,7 @@ setup(
             'payload_manager = smart_control.payload_manager:main',
             'safety_watchdog = smart_control.safety_watchdog:main',
             'nav_coordinator = smart_control.nav_coordinator:main',
+            'telemetry_mux = smart_control.telemetry_mux:main',
         ],
     },
 )

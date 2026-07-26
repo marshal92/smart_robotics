@@ -2,6 +2,8 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, String
+from smart_interfaces.msg import SmartCommand
+
 import json
 import time
 import threading
@@ -13,11 +15,12 @@ class PayloadManager(Node):
         self.active_tools = set()
         
         self.create_subscription(Bool, '/cmd_light', self.light_cb, 10)
-        self.create_subscription(String, '/payload/command', self.cmd_cb, 10)
+        self.create_subscription(SmartCommand, '/smart_command', self.cmd_cb, 10)
+        #self.create_subscription(String, '/payload/command', self.cmd_cb, 10)
         
         self.status_pub = self.create_publisher(String, '/payload/status', 10)
         
-        self.get_logger().info("🛠️ Payload Manager activated. Equipment ready.")
+        self.get_logger().info("Payload Manager activated. Equipment ready.")
 
     def light_cb(self, msg):
         state = "ON" if msg.data else "OFF"
@@ -25,17 +28,16 @@ class PayloadManager(Node):
         # In future, this will contain code for communicating with the microcontroller (I2C/Serial)
 
     def cmd_cb(self, msg):
-        try:
-            payload = json.loads(msg.data)
-            action = payload.get("action")
+        if msg.target_system != 'payload':
+            return
             
-            if action == "mock_sample":
-                if "lfcm_drill" not in self.active_tools:
-                    threading.Thread(target=self._execute_sample, daemon=True).start()
-                else:
-                    self.get_logger().warn("Drill already in use!")
-        except Exception as e:
-            self.get_logger().error(f"Parse Error: {e}")
+        action = msg.command
+        
+        if action == "mock_sample":
+            if "lfcm_drill" not in self.active_tools:
+                threading.Thread(target=self._execute_sample, daemon=True).start()
+            else:
+                self.get_logger().warn("Drill already in use!")
 
     def _execute_sample(self):
         tool = "lfcm_drill"
@@ -43,11 +45,11 @@ class PayloadManager(Node):
         self._publish_status()
         
         try:
-            self.get_logger().info("⚙️ [Drill] Starting drilling...")
+            self.get_logger().info("[Drill] Starting drilling...")
             time.sleep(2.0)
-            self.get_logger().info("⚙️ [Drill] Calibrating...")
+            self.get_logger().info("[Drill] Calibrating...")
             time.sleep(3.0)
-            self.get_logger().info("✅ [Drill] Sample isolated.")
+            self.get_logger().info("[Drill] Sample isolated.")
         finally:
             self.active_tools.discard(tool)
             self._publish_status()

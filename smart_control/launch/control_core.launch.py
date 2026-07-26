@@ -21,17 +21,6 @@ def generate_launch_description():
         }]
     )
 
-#    mission_control_node = Node(
-#        package='smart_control',
-#        executable='mission_control',
-#        name='mission_control',
-#        output='screen',
-#        parameters=[{
-#            'use_sim_time': use_sim_time,
-#            'require_heartbeat': LaunchConfiguration('require_heartbeat')
-#        }]
-#    )
-
     waypoint_manager_node = Node(
         package='smart_control',
         executable='waypoint_manager',
@@ -60,12 +49,20 @@ def generate_launch_description():
         name='payload_manager',
         output='screen'
     )
+
+    telemetry_mux_node = Node(
+        package='smart_control',
+        executable='telemetry_mux',
+        name='telemetry_mux',
+        output='screen'
+    )
+
     return LaunchDescription([
         require_heartbeat_arg,
         mission_manager_node,
-#       mission_control_node,
         waypoint_manager_node,
         payload_manager_node,
         safety_watchdog_node,
-        nav_coordinator_node
+        nav_coordinator_node,
+        telemetry_mux_node
     ])

@@ -13,6 +13,7 @@ from nav2_msgs.srv import ClearEntireCostmap
 from slam_toolbox.srv import Pause
 from rcl_interfaces.srv import SetParameters
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+from smart_interfaces.msg import SmartCommand
 
 class MissionManager(Node):
     def __init__(self):
@@ -39,7 +40,8 @@ class MissionManager(Node):
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE
         )
-        self.sub = self.create_subscription(String, '/system_command', self.command_cb, qos)
+        # self.sub = self.create_subscription(String, '/system_command', self.command_cb, qos)
+        self.sub = self.create_subscription(SmartCommand, '/smart_command', self.command_cb, qos)
 
         self.get_logger().info(f"Mission Manager started. sim_time={self.use_sim_time}")
 
@@ -79,7 +81,8 @@ class MissionManager(Node):
                 x = float(self.get_parameter('spawn_x').value)
                 y = float(self.get_parameter('spawn_y').value)
                 yaw = float(self.get_parameter('spawn_yaw').value)
-                
+
+                #threading.Thread(target=self._publish_initial_pose, args=(x, y, yaw), daemon=True).start()
                 # CONDITION: we only fire if coordinates are not zero (more than 1 cm)
                 if abs(x) > 0.01 or abs(y) > 0.01 or abs(yaw) > 0.01:
                     threading.Thread(target=self._publish_initial_pose, args=(x, y, yaw), daemon=True).start()
@@ -169,12 +172,14 @@ class MissionManager(Node):
             self.get_logger().info("SLAM Toolbox toggled")
 
     # COMMAND DISPATCHER
-
     def command_cb(self, msg):
-        cmd = msg.data.strip().lower()
-        self.get_logger().info(f"Received action: '{cmd}'")
+        # Ignore everything that is not addressed to the system
+        if msg.target_system != 'system':
+            return
 
-        # Compatibility with your WEB UI
+        cmd = msg.command.strip().lower()
+        self.get_logger().info(f"Received system action: '{cmd}'")
+
         legacy_dispatch = {
             'start_213':          lambda: threading.Thread(target=self._start_mission, args=("lifelong", "213_map"), daemon=True).start(),
             'start_shelter_zero': lambda: threading.Thread(target=self._start_mission, args=("lifelong", "shelter_zero"), daemon=True).start(),
@@ -195,7 +200,7 @@ class MissionManager(Node):
             legacy_dispatch[cmd]()
             return
 
-        # NEW UNIVERSAL SYNTAX (start:mode:map_name)
+        # NEW UNIVERSAL SYNTAX
         cmd_parts = cmd.split(':')
         action = cmd_parts[0]
 
@@ -204,7 +209,7 @@ class MissionManager(Node):
             map_name = cmd_parts[2] if len(cmd_parts) > 2 else "none"
             threading.Thread(target=self._start_mission, args=(mode, map_name), daemon=True).start()
         else:
-            self.get_logger().error(f"Unknown command: '{cmd}'")
+            self.get_logger().error(f"Unknown system command: '{cmd}'")
 
 def main(args=None):
     rclpy.init(args=args)

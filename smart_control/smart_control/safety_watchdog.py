@@ -4,6 +4,8 @@ from rclpy.node import Node
 from std_msgs.msg import Empty, String
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from enum import Enum
+from smart_interfaces.msg import SmartCommand
+
 import json
 import time
 
@@ -36,17 +38,20 @@ class SafetyWatchdog(Node):
 
         # Publishers
         self.fsm_pub = self.create_publisher(String, '/fsm_status', 10)
-        self.tactical_pub = self.create_publisher(String, '/tactical_command', 10)
+        self.cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
+        #self.tactical_pub = self.create_publisher(String, '/tactical_command', 10)
+
         # Subscriptions
         heartbeat_qos = QoSProfile(reliability=QoSReliabilityPolicy.BEST_EFFORT, history=QoSHistoryPolicy.KEEP_LAST, depth=1)
         self.create_subscription(Empty, '/operator_heartbeat', self.heartbeat_cb, heartbeat_qos)
         self.create_subscription(String, '/payload/status', self.payload_status_cb, 10)
-        self.create_subscription(String, '/operator_command', self.operator_cb, 10)
+        self.create_subscription(SmartCommand, '/smart_command', self.operator_cb, 10)
+        #self.create_subscription(String, '/operator_command', self.operator_cb, 10)
 
         # Main check loop (10 Hz)
         self.create_timer(0.1, self.fsm_loop)
 
-        self.get_logger().info(f"🛡️ Safety Watchdog activated. Heartbeat requirement: {self.require_heartbeat}")
+        self.get_logger().info(f"Safety Watchdog activated. Heartbeat requirement: {self.require_heartbeat}")
 
     def heartbeat_cb(self, msg):
         if not self.first_heartbeat_received:
@@ -62,8 +67,7 @@ class SafetyWatchdog(Node):
             self.get_logger().error(f"Error processing payload status: {e}")
 
     def operator_cb(self, msg):
-        cmd = msg.data.upper()
-        if cmd == "RESUME":
+        if msg.target_system == 'operator' and msg.command.upper() == "RESUME":
             if self.current_state == SystemState.SAFE_HOLD:
                 self.get_logger().info('[OPERATOR] Command RESUME received. System unlocked.')
                 self.transition_to(SystemState.NORMAL)
@@ -76,22 +80,24 @@ class SafetyWatchdog(Node):
         self.current_state = new_state
         now = self.get_clock().now().nanoseconds / 1e9
         
-        self.get_logger().info(f'🔄 [FSM] Transition: {old_state.name} -> {new_state.name}')
+        self.get_logger().info(f'[FSM] Transition: {old_state.name} -> {new_state.name}')
 
         if new_state == SystemState.WARNING:
             self.get_logger().warn('SIGNAL LOST! Emergency braking.')
-            self.tactical_pub.publish(String(data=json.dumps({"action": "cancel"})))
+            self.cmd_pub.publish(SmartCommand(target_system='nav', command='cancel'))
 
         elif new_state == SystemState.EVACUATING:
             self.get_logger().error('CRITICAL FAILURE! Initiating evacuation.')
             self.evacuation_start_time = now 
-            self.tactical_pub.publish(String(data=json.dumps({"action": "cancel"})))
+            self.cmd_pub.publish(SmartCommand(target_system='nav', command='cancel'))
             time.sleep(0.5)
-            self.tactical_pub.publish(String(data=json.dumps({"action": "rth", "x": 0.0, "y": 0.0, "yaw": 0.0})))
+            # Экстренный RTH
+            payload = json.dumps({"x": 0.0, "y": 0.0, "yaw": 0.0})
+            self.cmd_pub.publish(SmartCommand(target_system='nav', command='rth', payload_json=payload))
             
         elif new_state == SystemState.SAFE_HOLD:
             self.get_logger().warn('SIGNAL STABILIZED. ROBOT LOCKED. PRESS RESUME.')
-            self.tactical_pub.publish(String(data=json.dumps({"action": "cancel"})))
+            self.cmd_pub.publish(SmartCommand(target_system='nav', command='cancel'))
 
     def fsm_loop(self):
         self.fsm_pub.publish(String(data=self.current_state.name))
