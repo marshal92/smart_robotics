@@ -14,8 +14,11 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(smart_interfaces REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 add_library(smart_plugins_core SHARED
   src/radiation_layer.cpp
@@ -56,7 +59,16 @@ ament_target_dependencies(stabilized_frame_publisher_node
   tf2_geometry_msgs
 )
 
-install(TARGETS smart_plugins_core alara_speed_reflex_node stabilized_frame_publisher_node
+add_executable(telemetry_mux src/telemetry_mux.cpp)
+ament_target_dependencies(telemetry_mux 
+  rclcpp 
+  std_msgs 
+  nav_msgs 
+  smart_interfaces 
+  nlohmann_json
+)
+
+install(TARGETS smart_plugins_core alara_speed_reflex_node stabilized_frame_publisher_node telemetry_mux
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
@@ -66,5 +78,7 @@ install(TARGETS smart_plugins_core alara_speed_reflex_node stabilized_frame_publ
 install(DIRECTORY include/ DESTINATION include)
 
 ament_export_include_directories(include)
+ament_export_libraries(smart_plugins_core)
+ament_export_dependencies(rclcpp nav2_costmap_2d nav2_core pluginlib std_msgs geometry_msgs nav_msgs)
 ament_export_libraries(smart_plugins_core)
 ament_package()

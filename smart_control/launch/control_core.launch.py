@@ -6,7 +6,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time')
     
-    require_heartbeat_arg = DeclareLaunchArgument('require_heartbeat', default_value='true')
+    require_heartbeat_arg = DeclareLaunchArgument('require_heartbeat', default_value='false')
 
     mission_manager_node = Node(
         package='smart_control',
@@ -51,9 +51,16 @@ def generate_launch_description():
     )
 
     telemetry_mux_node = Node(
-        package='smart_control',
+        package='smart_plugins',
         executable='telemetry_mux',
         name='telemetry_mux',
+        output='screen'
+    )
+
+    tactical_executor_node = Node(
+        package='smart_control',
+        executable='tactical_executor',
+        name='tactical_executor',
         output='screen'
     )
 
@@ -64,5 +71,6 @@ def generate_launch_description():
         payload_manager_node,
         safety_watchdog_node,
         nav_coordinator_node,
-        telemetry_mux_node
+        telemetry_mux_node,
+        tactical_executor_node
     ])

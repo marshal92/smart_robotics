@@ -73,6 +73,16 @@ class SafetyWatchdog(Node):
                 self.transition_to(SystemState.NORMAL)
             else:
                  self.get_logger().info(f'RESUME ignored. Current state: {self.current_state.name}')
+        elif msg.target_system == 'system':
+            if msg.command == 'watchdog_on':
+                self.require_heartbeat = True
+                self.first_heartbeat_received = False
+                self.get_logger().info('Watchdog ARMED by command. Waiting for first pulse...')
+            elif msg.command == 'watchdog_off':
+                self.require_heartbeat = False
+                self.first_heartbeat_received = False
+                self.transition_to(SystemState.NORMAL)
+                self.get_logger().info('Watchdog DISARMED by command.')
 
     def transition_to(self, new_state):
         if self.current_state == new_state: return
@@ -100,10 +110,11 @@ class SafetyWatchdog(Node):
             self.cmd_pub.publish(SmartCommand(target_system='nav', command='cancel'))
 
     def fsm_loop(self):
-        self.fsm_pub.publish(String(data=self.current_state.name))
-
         if not self.require_heartbeat or not self.first_heartbeat_received:
+            self.fsm_pub.publish(String(data="DISABLED"))
             return
+            
+        self.fsm_pub.publish(String(data=self.current_state.name))
 
         now = self.get_clock().now().nanoseconds / 1e9
         elapsed = now - self.last_heartbeat

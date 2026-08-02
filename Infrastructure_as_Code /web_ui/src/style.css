@@ -1,0 +1,30 @@
+:root {
+  --bg-color: #121212; 
+  --panel-bg: #1e1e1e; 
+  --text: #e0e0e0;
+  --accent: #1976d2; 
+  --green: #0faa14; 
+  --red: #d32f2f; 
+  --orange: #f57c00; 
+  --dark-bg: #2a2a2a;
+}
+body { 
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+  background: var(--bg-color); 
+  color: var(--text); 
+  padding: 20px; 
+  margin: 0; 
+}
+
+/* Blocks & Tabs */
+.block-container { background: var(--dark-bg); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #444; }
+.block-title { margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; }
+
+/* Grids and Buttons */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.cmd-btn { padding: 15px; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; color: white; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: 0.1s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; position: relative;}
+.cmd-btn span { font-size: 11px; opacity: 0.8; font-weight: normal; text-align: center;}
+.cmd-btn:active { transform: scale(0.95); }
+.c-green { background: var(--green); } .c-blue { background: var(--accent); } .c-red { background: var(--red); } .c-orange { background: var(--orange); } .c-gray { background: #555; } .c-purple { background: #7b1fa2; }
+
+input[type="text"], input[type="number"], input[type="range"] { background: #333; border: 1px solid #555; color: white; padding: 8px 12px; border-radius: 4px; font-size: 14px; }

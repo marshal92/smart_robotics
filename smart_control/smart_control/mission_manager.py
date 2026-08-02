@@ -144,9 +144,7 @@ class MissionManager(Node):
             self._start_mission(slam_mode="lifelong", map_name="new_213_map")
         threading.Thread(target=_do, daemon=True).start()
 
-    def _start_freeride(self):
-        self.get_logger().info("Freeride started (Navigation disabled)")
-        self._stop_mission()
+    # Native freeride handled by start_mission("mapping", "none")
 
     # NATIVE CALLS TO ROS 2
 
@@ -171,6 +169,23 @@ class MissionManager(Node):
             client.call_async(Pause.Request())
             self.get_logger().info("SLAM Toolbox toggled")
 
+    def _native_save_map(self, map_name):
+        map_path = f"/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/maps/{map_name}"
+        self.get_logger().info(f"Saving SLAM map to {map_path}...")
+        
+        # Save Pose Graph (For Lifelong SLAM)
+        cmd_pg = [
+            'ros2', 'service', 'call', '/slam_toolbox/serialize_map', 
+            'slam_toolbox/srv/SerializePoseGraph', f"{{filename: '{map_path}'}}"
+        ]
+        subprocess.run(cmd_pg, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # Save 2D Grid (For Nav2 / RViz)
+        cmd_2d = ['ros2', 'run', 'nav2_map_server', 'map_saver_cli', '-f', map_path]
+        subprocess.run(cmd_2d, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        self.get_logger().info(f"Map {map_name} saved successfully!")
+
     # COMMAND DISPATCHER
     def command_cb(self, msg):
         # Ignore everything that is not addressed to the system
@@ -188,7 +203,7 @@ class MissionManager(Node):
             'start_mapping':      lambda: threading.Thread(target=self._start_mission, args=("mapping", "none"), daemon=True).start(),
             'stop':               lambda: threading.Thread(target=self._stop_mission, daemon=True).start(),
             'restart':            lambda: self._restart_mission(),
-            'start_freeride':     lambda: threading.Thread(target=self._start_freeride, daemon=True).start(),
+            'start_freeride':     lambda: threading.Thread(target=self._start_mission, args=("mapping", "none"), daemon=True).start(),
             'clear_costmaps':     lambda: [self._native_clear_costmap('/local_costmap/clear_entirely_local_costmap'), 
                                            self._native_clear_costmap('/global_costmap/clear_entirely_global_costmap')],
             'rad_on':             lambda: self._native_set_radiation(True),
@@ -208,6 +223,9 @@ class MissionManager(Node):
             mode = cmd_parts[1] if len(cmd_parts) > 1 else "lifelong"
             map_name = cmd_parts[2] if len(cmd_parts) > 2 else "none"
             threading.Thread(target=self._start_mission, args=(mode, map_name), daemon=True).start()
+        elif action == 'save_map':
+            map_name = cmd_parts[1] if len(cmd_parts) > 1 else "new_map"
+            threading.Thread(target=self._native_save_map, args=(map_name,), daemon=True).start()
         else:
             self.get_logger().error(f"Unknown system command: '{cmd}'")
 

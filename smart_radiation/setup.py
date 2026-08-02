@@ -28,6 +28,7 @@ setup(
     entry_points={
         'console_scripts': [
             'radiation_field_server = smart_radiation.radiation_field_server:main',
+            'virtual_geiger = smart_radiation.virtual_geiger:main',
             'dose_logger = smart_radiation.dose_logger:main',
             'generate_map = smart_radiation.generate_map:main',
             'view_map = smart_radiation.view_map:main',

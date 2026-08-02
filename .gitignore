@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+
+# ROS2 workspace (if built inside src, though usually not)
+install/
+build/
+log/
+
+# IDEs
+.vscode/
+.idea/
+
+# Web UI and JS
+**/node_modules/
+**/dist-ssr/
+.DS_Store

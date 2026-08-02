@@ -15,11 +15,9 @@ class WaypointManager(Node):
         
         self.wp_list_pub = self.create_publisher(String, '/waypoints_list', 10)
         self.cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
-        #self.tactical_pub = self.create_publisher(String, '/tactical_command', 10)
         self.marker_pub = self.create_publisher(MarkerArray, '/smart_waypoints_markers', 10)
 
         self.create_subscription(SmartCommand, '/smart_command', self.command_cb, 10)
-        #self.create_subscription(String, '/waypoint_command', self.command_cb, 10)
         
         self.waypoints_dir = os.path.expanduser('~/.ros/smart_data')
         os.makedirs(self.waypoints_dir, exist_ok=True)
@@ -58,43 +56,63 @@ class WaypointManager(Node):
 
         name = payload.get("name", "").lower().replace(" ", "_")
 
-        # If the command is addressed to the waypoint database
+        # --- PROCESSING COMMANDS FOR THE DATABASE---
         if msg.target_system == 'waypoints':
             action = msg.command
+            
             if action == "save":
-                self.waypoints[name] = {
-                    "x": float(payload.get("x", 0.0)),
-                    "y": float(payload.get("y", 0.0)),
-                    "yaw": float(payload.get("yaw", 0.0))
-                }
+                tab = payload.get("tab", "global") 
+                
+                # If an array of points arrived, save it as a route
+                if "points" in payload:
+                    self.waypoints[name] = {
+                        "type": "route",
+                        "tab": tab,
+                        "points": payload["points"]
+                    }
+                    self.get_logger().info(f"Route '{name.upper()}' saved with {len(payload['points'])} points.")
+                # Otherwise, save as a single point
+                else:
+                    self.waypoints[name] = {
+                        "type": "point",
+                        "tab": tab,
+                        "x": float(payload.get("x", 0.0)),
+                        "y": float(payload.get("y", 0.0)),
+                        "yaw": float(payload.get("yaw", 0.0))
+                    }
+                    self.get_logger().info(f"Waypoint '{name.upper()}' saved.")
+                
                 self.save_waypoints()
                 self.sync_routine() 
-                self.get_logger().info(f"Waypoint '{name.upper()}' saved.")
                 
             elif action == "delete":
                 if name in self.waypoints:
                     del self.waypoints[name]
                     self.save_waypoints()
                     self.sync_routine()
-                    self.get_logger().info(f"Waypoint '{name.upper()}' deleted.")
+                    self.get_logger().info(f"Item '{name.upper()}' deleted.")
 
-        # Broadcast: If someone asked to go by name, transfer into coordinates
+        # --- SENDING COMMANDS TO THE ROBOT (NAVIGATOR) ---
         elif msg.target_system == 'nav' and msg.command == 'go_to_named':
             if name in self.waypoints:
                 wp = self.waypoints[name]
-                
                 cmd_msg = SmartCommand()
                 cmd_msg.target_system = 'nav'
-                cmd_msg.command = 'go_to'
-                cmd_msg.payload_json = json.dumps({
-                    "x": wp["x"],
-                    "y": wp["y"],
-                    "yaw": wp["yaw"]
-                })
+                
+                # If this is a route, send an array of points
+                if wp.get("type") == "route":
+                    cmd_msg.command = 'waypoints'
+                    cmd_msg.payload_json = json.dumps({"points": wp["points"]})
+                    self.get_logger().info(f"Sending Route '{name.upper()}' to Nav Coordinator.")
+                # If a single point, go_to
+                else:
+                    cmd_msg.command = 'go_to'
+                    cmd_msg.payload_json = json.dumps({"x": wp["x"], "y": wp["y"], "yaw": wp["yaw"]})
+                    self.get_logger().info(f"Sending Point '{name.upper()}' to Nav Coordinator.")
+                
                 self.cmd_pub.publish(cmd_msg)
-                self.get_logger().info(f"Translated '{name.upper()}' to Nav coordinates.")
             else:
-                self.get_logger().warn(f"Waypoint '{name}' not found in database!")
+                self.get_logger().warn(f"Item '{name}' not found in database!")
 
     def publish_markers(self):
         msg = MarkerArray()
@@ -106,14 +124,22 @@ class WaypointManager(Node):
             marker.id = idx
             marker.type = Marker.CYLINDER
             marker.action = Marker.ADD
-            marker.pose.position.x = float(wp['x'])
-            marker.pose.position.y = float(wp['y'])
+            
+            # If this is a route, put a marker on the first point
+            if wp.get("type") == "route":
+                marker.pose.position.x = float(wp['points'][0][0])
+                marker.pose.position.y = float(wp['points'][0][1])
+                marker.color.r, marker.color.g, marker.color.b = 0.8, 0.2, 0.8 # Фиолетовый для маршрутов
+            else:
+                marker.pose.position.x = float(wp['x'])
+                marker.pose.position.y = float(wp['y'])
+                marker.color.r, marker.color.g, marker.color.b = 0.0, 0.7, 1.0 # Синий для точек
+                
             marker.pose.position.z = 0.1
             marker.scale.x = 0.3
             marker.scale.y = 0.3
             marker.scale.z = 0.2
             marker.color.a = 0.7
-            marker.color.r, marker.color.g, marker.color.b = 0.0, 0.7, 1.0 
             msg.markers.append(marker)
             
             text_marker = Marker()
@@ -122,8 +148,8 @@ class WaypointManager(Node):
             text_marker.id = idx + 1000
             text_marker.type = Marker.TEXT_VIEW_FACING
             text_marker.action = Marker.ADD
-            text_marker.pose.position.x = float(wp['x'])
-            text_marker.pose.position.y = float(wp['y'])
+            text_marker.pose.position.x = marker.pose.position.x
+            text_marker.pose.position.y = marker.pose.position.y
             text_marker.pose.position.z = 0.4
             text_marker.scale.z = 0.2
             text_marker.color.a = 1.0

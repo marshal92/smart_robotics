@@ -11,12 +11,15 @@
   <depend>rclcpp</depend>
   <depend>nav2_costmap_2d</depend>
   <depend>nav2_core</depend>
+  <depend>nav2_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>smart_interfaces</depend>
+  <depend>nlohmann_json</depend>
   <depend>pluginlib</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>nav_msgs</depend>
-  <depend>nav2_msgs</depend>
   <depend>tf2_ros</depend>
+  <depend>tf2</depend>
   <depend>tf2_geometry_msgs</depend>
 
   <export>

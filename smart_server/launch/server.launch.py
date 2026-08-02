@@ -14,7 +14,8 @@ def generate_launch_description():
         package='rosbridge_server',
         executable='rosbridge_websocket',
         name='rosbridge_websocket',
-        output='screen'
+        output='screen',
+        parameters=[{'max_message_size': 100000000}]
     )
     
     heartbeat_node = Node(
@@ -57,6 +58,20 @@ def generate_launch_description():
         parameters=[{'use_sim_time': use_sim_time}]
     )
 
+    map_to_image_node = Node(
+        package='smart_server',
+        executable='map_to_image',
+        name='map_to_image',
+        output='screen'
+    )
+
+    web_server_node = Node(
+        package='smart_server',
+        executable='web_server',
+        name='web_server',
+        output='screen'
+    )
+
     return LaunchDescription([
         world_arg,
         use_sim_time_arg,
@@ -65,5 +80,7 @@ def generate_launch_description():
         twin_orchestrator_node,
         shadow_teleop_sim_node,
         shadow_teleop_real_node,
-        rosbridge_node
+        rosbridge_node,
+        map_to_image_node,
+        web_server_node
     ])

@@ -28,11 +28,13 @@ setup(
     },
     entry_points={
         'console_scripts': [
-          'heartbeat_pub = smart_server.heartbeat_pub:main',
-          'sdf_visualizer = smart_server.sdf_visualizer_node:main',
-          'twin_orchestrator = smart_server.twin_orchestrator:main',
-          'shadow_teleop_real = smart_server.shadow_teleop_real:main',
-          'shadow_teleop_sim = smart_server.shadow_teleop_sim:main',
+            'heartbeat_pub = smart_server.heartbeat_pub:main',
+            'sdf_visualizer = smart_server.sdf_visualizer_node:main',
+            'twin_orchestrator = smart_server.twin_orchestrator:main',
+            'shadow_teleop_sim = smart_server.shadow_teleop_sim:main',
+            'shadow_teleop_real = smart_server.shadow_teleop_real:main',
+            'map_to_image = smart_server.map_to_image:main',
+            'web_server = smart_server.web_server:main',
         ],
     },
 )

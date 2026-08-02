@@ -52,6 +52,13 @@ def generate_launch_description():
         output='screen'
     )
 
+    virtual_geiger_node = Node(
+        package='smart_radiation',
+        executable='virtual_geiger',
+        name='virtual_geiger',
+        output='screen'
+    )
+
     alara_reflex_node = Node(
         package='smart_plugins',
         executable='alara_speed_reflex_node',
@@ -102,6 +109,7 @@ def generate_launch_description():
         simulation_launch,
         control_core_launch,
         radiation_server_node,
+        virtual_geiger_node,
         alara_reflex_node,
         stabilized_frame_node,
         pc_to_laserscan_node,

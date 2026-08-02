@@ -17,6 +17,7 @@ slam_toolbox:
 
     # Localization map file path
     map_file_name: "" 
+    map_start_pose: [0.0, 0.0, 0.0]
 
     debug_logging: false
     throttle_scans: 1

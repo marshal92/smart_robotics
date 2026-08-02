@@ -3,8 +3,9 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from sensor_msgs.msg import CompressedImage
-from geometry_msgs.msg import Point
+from std_msgs.msg import String
 import cv2
+import json
 import numpy as np
 from ultralytics import YOLO
 
@@ -25,7 +26,7 @@ class YoloZoo(Node):
         )
         
         self.sub = self.create_subscription(CompressedImage, '/camera/image_raw/compressed', self.img_callback, qos_profile=qos_policy)
-        self.target_pub = self.create_publisher(Point, '/person_track', 10)
+        self.target_pub = self.create_publisher(String, '/ai/vision_targets', 10)
         self.debug_pub = self.create_publisher(CompressedImage, '/yolo_overlay/compressed', 10)
         
         self.get_logger().info(f"Mode 1 enabled (Window: {self.show_video})")
@@ -40,18 +41,28 @@ class YoloZoo(Node):
             annotated_frame = results[0].plot()
             
             height, width, _ = cv_image.shape
-            target_msg = Point()
-            target_msg.x = -999.0 
+            
+            detected_objects = []
             
             if len(results[0].boxes) > 0:
-                box = results[0].boxes[0]
-                x1, _, x2, _ = box.xyxy[0].tolist()
-                obj_center_x = (x1 + x2) / 2
-                offset = (width/2 - obj_center_x) / (width/2)
-                
-                target_msg.x = float(offset)
-                cv2.line(annotated_frame, (int(width/2), int(height/2)), (int(obj_center_x), int(height/2)), (0, 255, 0), 2)
+                for box in results[0].boxes:
+                    x1, _, x2, _ = box.xyxy[0].tolist()
+                    cls_id = int(box.cls[0].item())
+                    cls_name = self.model.names[cls_id]
+                    
+                    obj_center_x = (x1 + x2) / 2
+                    offset = (width/2 - obj_center_x) / (width/2)
+                    
+                    detected_objects.append({
+                        "class": cls_name,
+                        "id": cls_id,
+                        "offset": float(offset)
+                    })
+                    
+                    cv2.line(annotated_frame, (int(width/2), int(height/2)), (int(obj_center_x), int(height/2)), (0, 255, 0), 2)
 
+            target_msg = String()
+            target_msg.data = json.dumps(detected_objects)
             self.target_pub.publish(target_msg)
 
             _, encoded_img = cv2.imencode('.jpg', annotated_frame)

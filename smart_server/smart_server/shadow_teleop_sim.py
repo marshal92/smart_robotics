@@ -8,12 +8,11 @@ from nav_msgs.msg import Path, OccupancyGrid
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
-from rclpy.action import ActionClient
-from nav2_msgs.action import NavigateThroughPoses
-from action_msgs.msg import GoalStatus
-import math, threading, time
+# УДАЛИЛИ импорты ActionClient и NavigateThroughPoses
+import math, threading, time, json
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
+from smart_interfaces.msg import SmartCommand # ИМПОРТ НОВОГО СООБЩЕНИЯ
 
 class ShadowTeleopSim(Node):
     def __init__(self):
@@ -35,12 +34,12 @@ class ShadowTeleopSim(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
         self.marker_pub  = self.create_publisher(Marker, '/shadow_marker', 10)
         self.path_pub    = self.create_publisher(Path,   '/shadow_path',   5)
+        
+        # НОВЫЙ ПАБЛИШЕР: Отправляем готовый маршрут на робота
+        self.smart_cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
 
         self.tf_buffer   = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-
-        self.nav_client = ActionClient(self, NavigateThroughPoses, 'navigate_through_poses')
-        self.current_goal_handle = None
 
         pkg = get_package_share_directory('smart_server')
         self.mesh_uri = f"file://{pkg}/meshes/shadow.STL"
@@ -64,8 +63,6 @@ class ShadowTeleopSim(Node):
         self._tf_msg.header.frame_id = 'map'
         self._tf_msg.child_frame_id  = 'shadow_base_link'
         self._tf_msg.transform.translation.z = 0.0
-        self._tf_msg.transform.rotation.x    = 0.0
-        self._tf_msg.transform.rotation.y    = 0.0
 
         self._marker = Marker()
         self._marker.ns   = 'shadow_robot'
@@ -73,7 +70,6 @@ class ShadowTeleopSim(Node):
         self._marker.mesh_resource = self.mesh_uri
         self._marker.action = Marker.ADD
         self._marker.scale.x = self._marker.scale.y = self._marker.scale.z = 0.001
-        self._marker.pose.orientation.w = 1.0
 
         self._ui_counter = 0
         self._last_real_ns = None   
@@ -82,20 +78,17 @@ class ShadowTeleopSim(Node):
         self._loop_thread = threading.Thread(target=self._real_time_loop, daemon=True, name='shadow_loop')
         self._loop_thread.start()
 
-        self.get_logger().info("[Server] Shadow Teleop Node Started (Time Thief Mode)")
+        self.get_logger().info("[Server] Shadow Teleop Sim Started (SmartCommand Mode)")
 
     def _real_time_loop(self):
         period = 1.0 / 30.0
         while self._running and rclpy.ok():
             t_start = time.monotonic()
-            try:
-                self._update()
-            except Exception as e:
-                pass
+            try: self._update()
+            except Exception: pass
             elapsed = time.monotonic() - t_start
             sleep_time = period - elapsed
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+            if sleep_time > 0: time.sleep(sleep_time)
 
     def cmd_cb(self, msg: Twist):
         self.v = msg.linear.x
@@ -108,8 +101,8 @@ class ShadowTeleopSim(Node):
     def external_goal_cb(self, msg: PoseStamped):
         dist = math.hypot(self.x - msg.pose.position.x, self.y - msg.pose.position.y)
         if dist > 0.1:
-            self.x     = msg.pose.position.x
-            self.y     = msg.pose.position.y
+            self.x = msg.pose.position.x
+            self.y = msg.pose.position.y
             self.theta = self._yaw_from_quat(msg.pose.orientation)
             self.recorded_poses.clear()
             self.path_msg.poses.clear()
@@ -145,18 +138,11 @@ class ShadowTeleopSim(Node):
     def _yaw_from_quat(q) -> float:
         return math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
-    def cancel_active_goal(self):
-        if self.current_goal_handle is not None:
-            self.current_goal_handle.cancel_goal_async()
-            self.current_goal_handle = None
-
     def command_cb(self, msg: String):
         cmd = msg.data.strip().lower()
         if cmd in ('stop', 'abort'):
-            self.cancel_active_goal()
             self.state = 'IDLE'
         elif cmd == 'clear':
-            self.cancel_active_goal()
             self.recorded_poses.clear()
             self.path_msg.poses.clear()
             self._path_dirty = True
@@ -188,25 +174,29 @@ class ShadowTeleopSim(Node):
             self._path_dirty = True
 
     def _send_nav_path(self):
-        if not self.nav_client.wait_for_server(timeout_sec=2.0): return
-        goal = NavigateThroughPoses.Goal()
-        goal.poses = self.recorded_poses
-        self.state = 'NAVIGATING'
-        self.nav_client.send_goal_async(goal).add_done_callback(self._goal_response_cb)
-
-    def _goal_response_cb(self, future):
-        handle = future.result()
-        if not handle.accepted:
-            self.state = 'IDLE'
+        """ Упаковываем маршрут в JSON и шлем в /smart_command """
+        if not self.recorded_poses:
             return
-        self.current_goal_handle = handle
-        handle.get_result_async().add_done_callback(self._goal_result_cb)
+            
+        self.get_logger().info(f"Packing Shadow Route ({len(self.recorded_poses)} points) for Nav Coordinator...")
+        
+        points_list = []
+        for p in self.recorded_poses:
+            yaw = self._yaw_from_quat(p.pose.orientation)
+            points_list.append([p.pose.position.x, p.pose.position.y, yaw])
 
-    def _goal_result_cb(self, future):
-        status = future.result().status
-        if status == GoalStatus.STATUS_SUCCEEDED:
-            self.get_logger().info("Mission completed.")
-        self.current_goal_handle = None
+        payload = {
+            "points": points_list,
+            "bt": "" # Можно добавить логику деревьев поведения потом
+        }
+        
+        msg = SmartCommand()
+        msg.target_system = 'nav'
+        msg.command = 'waypoints'
+        msg.payload_json = json.dumps(payload)
+        
+        self.smart_cmd_pub.publish(msg)
+        
         self.state = 'IDLE'
         self.recorded_poses.clear()
         self.path_msg.poses.clear()
@@ -281,11 +271,11 @@ class ShadowTeleopSim(Node):
         else:
             m.pose.position.z = 0.0
             if status == 'CRITICAL':
-                m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.0, 0.0, 0.7
+                m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.0, 0.0, 0.4
             elif status == 'WARNING':
-                m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.5, 0.0, 0.7
+                m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.5, 0.0, 0.4
             else:
-                m.color.r, m.color.g, m.color.b, m.color.a = 0.0, 1.0, 1.0, 0.4
+                m.color.r, m.color.g, m.color.b, m.color.a = 0.0, 1.0, 1.0, 0.15
         self.marker_pub.publish(m)
 
         if is_moving:

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://cdds.io/config https://raw.githubusercontent.com/eclipse-cyclonedds/cyclonedds/master/etc/cyclonedds.xsd">
+    <Domain>
+        <General>
+            <Interfaces>
+                <!-- Тот самый Wi-Fi адаптер твоего ThinkPad -->
+                <NetworkInterface name="wlp82s0" priority="default" multicast="default" />
+            </Interfaces>
+            <!-- Глушим мультикаст, чтобы ноут не собирал мусор с роутера -->
+            <AllowMulticast>false</AllowMulticast>
+        </General>
+        <Discovery>
+            <Peers>
+                <!-- Жестко направляем все пакеты на Wi-Fi адрес Малины -->
+                <Peer address="192.168.31.100"/>
+            </Peers>
+        </Discovery>
+    </Domain>
+</CycloneDDS>

@@ -22,6 +22,9 @@ setup(
         'console_scripts': [
             'smart_ears = smart_ai.smart_ears:main',
             'yolo_publisher = smart_ai.yolo_publisher:main',
+            'voice_listener_node = smart_ai.voice_listener_node:main',
+            'semantic_dispatcher_node = smart_ai.semantic_dispatcher_node:main',
+            'spatial_projector_node = smart_ai.spatial_projector_node:main',
         ],
     },
 )

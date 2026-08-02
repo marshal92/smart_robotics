@@ -6,15 +6,32 @@ from launch.conditions import IfCondition
 
 def generate_launch_description():
     run_yolo_arg = DeclareLaunchArgument('run_yolo', default_value='false')
-    run_ears_arg = DeclareLaunchArgument('run_ears', default_value='false')
+    run_ai_core_arg = DeclareLaunchArgument('run_ai_core', default_value='true')
     
-    ears_node = Node(
-        condition=IfCondition(LaunchConfiguration('run_ears')),
+    # New AI Core Nodes
+    voice_listener = Node(
+        condition=IfCondition(LaunchConfiguration('run_ai_core')),
         package='smart_ai',
-        executable='smart_ears',
-        name='smart_ears',
+        executable='voice_listener_node',
+        name='voice_listener',
         output='screen',
-        prefix='xterm -hold -e ' 
+        prefix='xterm -hold -e ' # Needed for spacebar input
+    )
+
+    dispatcher_node = Node(
+        condition=IfCondition(LaunchConfiguration('run_ai_core')),
+        package='smart_ai',
+        executable='semantic_dispatcher_node',
+        name='semantic_dispatcher',
+        output='screen'
+    )
+
+    spatial_projector_node = Node(
+        condition=IfCondition(LaunchConfiguration('run_ai_core')),
+        package='smart_ai',
+        executable='spatial_projector_node',
+        name='spatial_projector',
+        output='screen'
     )
 
     yolo_node = Node(
@@ -28,7 +45,9 @@ def generate_launch_description():
 
     return LaunchDescription([
         run_yolo_arg,
-        run_ears_arg,
-        ears_node,
+        run_ai_core_arg,
+        voice_listener,
+        dispatcher_node,
+        spatial_projector_node,
         yolo_node
     ])

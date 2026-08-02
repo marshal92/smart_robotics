@@ -2,7 +2,9 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
+from sensor_msgs.msg import CompressedImage
 import numpy as np
+import cv2
 import os
 from ament_index_python.packages import get_package_share_directory
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
@@ -28,6 +30,7 @@ class RadiationFieldServer(Node):
         map_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.map_sub = self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
         self.rad_pub = self.create_publisher(OccupancyGrid, '/radiation_map', map_qos)
+        self.image_pub = self.create_publisher(CompressedImage, '/radiation_image/compressed', map_qos)
         
         self.declare_parameter('is_active', False)
         self.is_active = False
@@ -59,9 +62,29 @@ class RadiationFieldServer(Node):
             self.get_logger().info(f"Syncing SLAM map {width}x{height} with radiation matrix...")
             
             working_dose_map = np.zeros((height, width), dtype=np.float32)
-            min_h = min(height, self.raw_dose_map.shape[0])
-            min_w = min(width, self.raw_dose_map.shape[1])
-            working_dose_map[:min_h, :min_w] = self.raw_dose_map[:min_h, :min_w]
+            
+            # Real-world alignment
+            res = map_msg.info.resolution
+            map_origin_x = map_msg.info.origin.position.x
+            map_origin_y = map_msg.info.origin.position.y
+            
+            # The radiation map was generated with these offsets (from view_map.py)
+            rad_origin_x = -5.0024
+            rad_origin_y = -4.63
+            
+            # Calculate pixel offsets
+            offset_x = int((rad_origin_x - map_origin_x) / res)
+            offset_y = int((rad_origin_y - map_origin_y) / res)
+            
+            rad_h, rad_w = self.raw_dose_map.shape
+            
+            # Place the radiation map into the working dose map at the correct offset
+            for y in range(rad_h):
+                for x in range(rad_w):
+                    target_y = offset_y + y
+                    target_x = offset_x + x
+                    if 0 <= target_y < height and 0 <= target_x < width:
+                        working_dose_map[target_y, target_x] = self.raw_dose_map[y, x]
 
             cost_field = np.zeros_like(working_dose_map)
             mask_active = (working_dose_map > self.d_noise) & (working_dose_map < self.d_crit)
@@ -103,6 +126,34 @@ class RadiationFieldServer(Node):
         rad_msg.data = final_grid.flatten().tolist()
         
         self.rad_pub.publish(rad_msg)
+
+        # Publish CompressedImage PNG for 3D Digital Twin Overlay
+        # We always publish the image so the UI can just toggle visibility
+        # Map 0-100 penalty to 0-255
+        heatmap_gray = (final_grid * 255.0 / 100.0).astype(np.uint8)
+        heatmap_color = cv2.applyColorMap(heatmap_gray, cv2.COLORMAP_TURBO)
+        
+        # Create RGBA
+        b, g, r = cv2.split(heatmap_color)
+        alpha = np.full(b.shape, 160, dtype=np.uint8) # semi-transparent
+        
+        # Hide pixels with 0 penalty or unknown SLAM map
+        alpha[final_grid <= 0] = 0
+        alpha[slam_map == -1] = 0
+        
+        rgba = cv2.merge((b, g, r, alpha))
+        
+        # Flip vertically to match the SLAM map's orientation in the Web UI
+        rgba = cv2.flip(rgba, 0)
+        
+        # Encode as PNG (keeps alpha)
+        success, encoded_image = cv2.imencode('.png', rgba)
+        if success:
+            img_msg = CompressedImage()
+            img_msg.header = rad_msg.header
+            img_msg.format = 'png'
+            img_msg.data = encoded_image.tobytes()
+            self.image_pub.publish(img_msg)
 
 def main(args=None):
     rclpy.init(args=args)

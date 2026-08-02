@@ -6,10 +6,10 @@ from nav_msgs.msg import Path, OccupancyGrid
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
-from rclpy.action import ActionClient
-from nav2_msgs.action import NavigateThroughPoses
-from action_msgs.msg import GoalStatus
+from smart_interfaces.msg import SmartCommand # Импортируем нашу шину
+
 import math
+import json
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
 
@@ -25,12 +25,12 @@ class ShadowTeleopReal(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
         self.marker_pub = self.create_publisher(Marker, '/shadow_marker', 10)
         self.path_pub   = self.create_publisher(Path,   '/shadow_path',   10)
+        
+        # НОВЫЙ ПАБЛИШЕР: Отправляем готовый маршрут на робота
+        self.smart_cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
 
         self.tf_buffer   = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.nav_client  = ActionClient(self, NavigateThroughPoses, 'navigate_through_poses')
-
-        self.current_goal_handle = None
 
         pkg = get_package_share_directory('smart_server')
         self.mesh_uri = f"file://{pkg}/meshes/shadow.STL"
@@ -72,7 +72,7 @@ class ShadowTeleopReal(Node):
         # ROS 2 timer (only for real-time)
         self.timer = self.create_timer(1.0 / 30.0, self.update_loop)
 
-        self.get_logger().info("[Server] Shadow Node Started (REAL ROBOT MODE)")
+        self.get_logger().info("[Server] Shadow Node Started (REAL ROBOT MODE, SmartCommand routing)")
 
     def costmap_cb(self, msg: OccupancyGrid):
         self._costmap_info  = msg.info
@@ -125,18 +125,9 @@ class ShadowTeleopReal(Node):
         except Exception:
             self.robot_pose_valid = False
 
-    def cancel_active_goal(self):
-        if self.current_goal_handle:
-            self.current_goal_handle.cancel_goal_async()
-            self.current_goal_handle = None
-
     def command_cb(self, msg: String):
         cmd = msg.data.strip().lower()
-        if cmd in ('stop', 'abort'):
-            self.cancel_active_goal()
-            self.state = 'IDLE'
-        elif cmd == 'clear':
-            self.cancel_active_goal()
+        if cmd in ('stop', 'abort', 'clear'):
             self.recorded_poses.clear()
             self.path_msg.poses.clear()
             self._path_dirty = True
@@ -148,31 +139,31 @@ class ShadowTeleopReal(Node):
             self._send_nav_path()
 
     def _send_nav_path(self):
-        if not self.nav_client.wait_for_server(timeout_sec=2.0):
-            self.get_logger().error("Nav2 unavailable!")
+        if not self.recorded_poses:
             return
-        goal = NavigateThroughPoses.Goal()
-        goal.poses = self.recorded_poses
-        self.state = 'NAVIGATING'
-        self.get_logger().info(f"Starting route ({len(self.recorded_poses)} points)")
-        self.nav_client.send_goal_async(goal).add_done_callback(self._goal_response_cb)
+            
+        self.get_logger().info(f"Packing Shadow Route ({len(self.recorded_poses)} points) for Nav Coordinator...")
+        
+        # Упаковываем маршрут в простой список
+        points_list = []
+        for p in self.recorded_poses:
+            yaw = self._yaw(p.pose.orientation)
+            points_list.append([p.pose.position.x, p.pose.position.y, yaw])
 
-    def _goal_response_cb(self, future):
-        handle = future.result()
-        if not handle.accepted:
-            self.get_logger().warn("Goal rejected by Nav2.")
-            self.state = 'IDLE'
-            return
-        self.current_goal_handle = handle
-        handle.get_result_async().add_done_callback(self._goal_result_cb)
-
-    def _goal_result_cb(self, future):
-        status = future.result().status
-        if status == GoalStatus.STATUS_SUCCEEDED:
-            self.get_logger().info("Mission completed.")
-        elif status == GoalStatus.STATUS_CANCELED:
-            self.get_logger().warn("Mission canceled.")
-        self.current_goal_handle = None
+        payload = {
+            "points": points_list,
+            "bt": "" # Место для кастомного дерева поведения, если понадобится
+        }
+        
+        # Отправляем в общую шину
+        msg = SmartCommand()
+        msg.target_system = 'nav'
+        msg.command = 'waypoints'
+        msg.payload_json = json.dumps(payload)
+        
+        self.smart_cmd_pub.publish(msg)
+        
+        # Сбрасываем Тень после отправки
         self.state = 'IDLE'
         self.recorded_poses.clear()
         self.path_msg.poses.clear()
@@ -255,9 +246,9 @@ class ShadowTeleopReal(Node):
             m.color.a = 0.0
         else:
             m.pose.position.z = 0.0
-            if status == 'CRITICAL': m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.0, 0.0, 0.7
-            elif status == 'WARNING': m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.5, 0.0, 0.7
-            else: m.color.r, m.color.g, m.color.b, m.color.a = 0.0, 1.0, 1.0, 0.4
+            if status == 'CRITICAL': m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.0, 0.0, 0.4
+            elif status == 'WARNING': m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.5, 0.0, 0.4
+            else: m.color.r, m.color.g, m.color.b, m.color.a = 0.0, 1.0, 1.0, 0.15
         self.marker_pub.publish(m)
 
         if is_moving:
