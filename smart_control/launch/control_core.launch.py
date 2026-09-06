@@ -64,6 +64,13 @@ def generate_launch_description():
         output='screen'
     )
 
+    recovery_relocalizer_node = Node(
+        package='smart_control',
+        executable='recovery_relocalizer',
+        name='recovery_relocalizer',
+        output='screen'
+    )
+
     return LaunchDescription([
         require_heartbeat_arg,
         mission_manager_node,
@@ -72,5 +79,6 @@ def generate_launch_description():
         safety_watchdog_node,
         nav_coordinator_node,
         telemetry_mux_node,
-        tactical_executor_node
+        tactical_executor_node,
+        recovery_relocalizer_node
     ])

@@ -45,25 +45,12 @@ def generate_launch_description():
         }.items()
     )
 
-    radiation_server_node = Node(
-        package='smart_radiation',
-        executable='radiation_field_server',
-        name='radiation_field_server',
-        output='screen'
-    )
 
-    virtual_geiger_node = Node(
-        package='smart_radiation',
-        executable='virtual_geiger',
-        name='virtual_geiger',
-        output='screen'
-    )
-
-    alara_reflex_node = Node(
-        package='smart_plugins',
-        executable='alara_speed_reflex_node',
-        name='alara_speed_reflex_node',
-        output='screen'
+    radiation_bringup_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('smart_radiation'), 'launch', 'radiation_bringup.launch.py'])),
+        launch_arguments={
+            'map_path': 'explored_map.npy'
+        }.items()
     )
 
     stabilized_frame_node = Node(
@@ -108,9 +95,7 @@ def generate_launch_description():
         spawn_x_arg, spawn_y_arg, spawn_yaw_arg,
         simulation_launch,
         control_core_launch,
-        radiation_server_node,
-        virtual_geiger_node,
-        alara_reflex_node,
+        radiation_bringup_launch,
         stabilized_frame_node,
         pc_to_laserscan_node,
         server_launch

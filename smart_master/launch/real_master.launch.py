@@ -55,28 +55,19 @@ def generate_launch_description():
     )
 
     # Subsystems (Radiation and Reflexes)
-    radiation_server_node = Node(
-        package='smart_radiation',
-        executable='radiation_field_server',
-        name='radiation_field_server',
-        output='screen',
-        parameters=[{'use_sim_time': False}]
-    )
-
-    alara_reflex_node = Node(
-        package='smart_plugins',
-        executable='alara_speed_reflex_node',
-        name='alara_speed_reflex_node',
-        output='screen',
-        parameters=[{'use_sim_time': False}]
+    radiation_bringup_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('smart_radiation'), 'launch', 'radiation_bringup.launch.py'])),
+        launch_arguments={
+            'use_sim_time': 'false',
+            'use_virtual_geiger': 'true'
+        }.items()
     )
 
     return LaunchDescription([
         use_arm_arg,
         hardware_launch,
         control_core_launch,
-        radiation_server_node,
-        alara_reflex_node,
+        radiation_bringup_launch,
         rsp_node,
         jsp_node
     ])

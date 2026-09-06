@@ -20,7 +20,6 @@ ZENOH_CMD="zenoh-bridge-dds -l tcp/0.0.0.0:7447 --no-multicast-scouting \
 \
 --allow '^rt/tf$' \
 --allow '^rt/tf_static$' \
---allow '^rt/odom$' \
 --allow '^rt/robot_description$' \
 --allow '^rt/map$' \
 --allow '^rt/map_updates$' \

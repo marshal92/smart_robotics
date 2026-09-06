@@ -23,8 +23,8 @@
     </div>
     
     <div v-if="store.routeQueue.length > 0" class="route-ui">
-      <span style="color:#aaa; font-size:13px; margin-right: 15px;">
-        Points in route: <span style="color:white; font-weight:bold;">{{ store.routeQueue.length }}</span>
+      <span style="color:var(--text); opacity:0.8; font-size:13px; margin-right: 15px;">
+        Points in route: <span style="color:var(--accent); opacity:1; font-weight:bold;">{{ store.routeQueue.length }}</span>
       </span>
       <button class="btn-action" style="background: #7b1fa2; padding:5px 10px; font-size:12px; height: auto;" @click="saveRoute">Save as Route</button>
       <button class="btn-action" style="background: transparent; border:1px solid var(--red); color:var(--red); padding:5px 10px; font-size:12px; height: auto; margin-left: 10px;" @click="store.clearRouteQueue">Reset</button>
@@ -80,9 +80,9 @@ const saveRoute = () => {
 </script>
 
 <style scoped>
-.creator-panel { padding-top: 10px; }
+.creator-panel { padding-top: 5px; }
 .input-group { display: flex; flex-direction: column; gap: 5px; }
-.input-group label { font-size: 12px; color: #aaa; }
+.input-group label { font-size: 12px; color: var(--text); opacity: 0.8; }
 .btn-action { color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; height: 35px; }
-.route-ui { margin-top:15px; padding:10px; background:#111; border-radius:4px; border: 1px dashed #555; display: flex; align-items: center; }
+.route-ui { margin-top:15px; padding:10px; background:var(--input-bg); border-radius:4px; border: 1px dashed var(--input-border); display: flex; align-items: center; }
 </style>

@@ -20,7 +20,7 @@ public:
         fsm_sub_ = this->create_subscription<std_msgs::msg::String>("/fsm_status", 10, std::bind(&TelemetryMuxCpp::fsm_cb, this, _1));
         nav_sub_ = this->create_subscription<std_msgs::msg::String>("/nav_status", 10, std::bind(&TelemetryMuxCpp::nav_cb, this, _1));
         odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>("/odom", 10, std::bind(&TelemetryMuxCpp::odom_cb, this, _1));
-        dose_sub_ = this->create_subscription<std_msgs::msg::Float32>("/current_dose_rate", 10, std::bind(&TelemetryMuxCpp::dose_cb, this, _1));
+        dose_sub_ = this->create_subscription<std_msgs::msg::Float32>("/radiation/dose", 10, std::bind(&TelemetryMuxCpp::dose_cb, this, _1));
         light_sub_ = this->create_subscription<std_msgs::msg::Bool>("/cmd_light", 10, std::bind(&TelemetryMuxCpp::light_cb, this, _1));
         payload_sub_ = this->create_subscription<std_msgs::msg::String>("/payload/status", 10, std::bind(&TelemetryMuxCpp::payload_cb, this, _1));
 

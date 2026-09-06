@@ -6,9 +6,25 @@ let smartCmdTopic = null
 let cmdVelTopic = null
 let cmdShadowTopic = null
 let cmdLightTopic = null
+let camSub = null
 
 export function getRosInstance() {
   return ros
+}
+
+export const switchCameraTopic = (topicName) => {
+  if (camSub) {
+    camSub.unsubscribe()
+  }
+  if (!ros) return
+  
+  const store = useRosStore()
+  camSub = new ROSLIB.Topic({
+    ros: ros,
+    name: topicName,
+    messageType: 'sensor_msgs/msg/CompressedImage'
+  })
+  camSub.subscribe((msg) => store.updateCameraStream(msg.data))
 }
 
 export function connectROS(url) {
@@ -46,12 +62,7 @@ export function connectROS(url) {
     })
     fsmStatusSub.subscribe((msg) => store.setFsmState(msg.data))
 
-    const camSub = new ROSLIB.Topic({
-      ros: ros,
-      name: '/camera/image_raw/compressed',
-      messageType: 'sensor_msgs/msg/CompressedImage'
-    })
-    camSub.subscribe((msg) => store.updateCameraStream(msg.data))
+    switchCameraTopic('/camera/image_raw/compressed')
 
     const rosoutSub = new ROSLIB.Topic({
       ros: ros,

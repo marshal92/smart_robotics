@@ -13,6 +13,7 @@ from nav2_msgs.srv import ClearEntireCostmap
 from slam_toolbox.srv import Pause
 from rcl_interfaces.srv import SetParameters
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+from std_srvs.srv import Trigger
 from smart_interfaces.msg import SmartCommand
 
 class MissionManager(Node):
@@ -155,13 +156,46 @@ class MissionManager(Node):
             self.get_logger().info(f"Cleared: {service_name}")
 
     def _native_set_radiation(self, is_active):
-        client = self.create_client(SetParameters, '/radiation_field_server/set_parameters')
-        if client.wait_for_service(timeout_sec=2.0):
+        client_field = self.create_client(SetParameters, '/radiation_field_server/set_parameters')
+        if client_field.wait_for_service(timeout_sec=2.0):
             req = SetParameters.Request()
             param = Parameter(name='is_active', value=ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=is_active))
             req.parameters.append(param)
-            client.call_async(req)
-            self.get_logger().info(f"Radiation server set to: {'ON' if is_active else 'OFF'}")
+            client_field.call_async(req)
+            
+        client_geiger = self.create_client(SetParameters, '/virtual_geiger/set_parameters')
+        if client_geiger.wait_for_service(timeout_sec=2.0):
+            req = SetParameters.Request()
+            param = Parameter(name='is_active', value=ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=is_active))
+            req.parameters.append(param)
+            client_geiger.call_async(req)
+            
+        self.get_logger().info(f"Radiation subsystems set to: {'ON' if is_active else 'OFF'}")
+
+    def _native_radiation_mapper_params(self, map_path, is_recording):
+        client_mapper = self.create_client(SetParameters, '/radiation_mapper/set_parameters')
+        if client_mapper.wait_for_service(timeout_sec=2.0):
+            req = SetParameters.Request()
+            p1 = Parameter(name='map_path', value=ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=map_path))
+            p2 = Parameter(name='is_recording', value=ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=is_recording))
+            req.parameters.extend([p1, p2])
+            client_mapper.call_async(req)
+            self.get_logger().info(f"Radiation Mapper set to: {map_path}, recording={is_recording}")
+            
+    def _native_radiation_server_params(self, map_path):
+        client_server = self.create_client(SetParameters, '/radiation_field_server/set_parameters')
+        if client_server.wait_for_service(timeout_sec=2.0):
+            req = SetParameters.Request()
+            p1 = Parameter(name='map_path', value=ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=map_path))
+            req.parameters.append(p1)
+            client_server.call_async(req)
+            self.get_logger().info(f"Radiation Field Server set to: {map_path}")
+            
+    def _native_radiation_mapper_trigger(self, service_name):
+        client = self.create_client(Trigger, service_name)
+        if client.wait_for_service(timeout_sec=2.0):
+            client.call_async(Trigger.Request())
+            self.get_logger().info(f"Called radiation trigger: {service_name}")
 
     def _native_toggle_slam(self):
         client = self.create_client(Pause, '/slam_toolbox/pause_new_measurements')
@@ -185,6 +219,9 @@ class MissionManager(Node):
         subprocess.run(cmd_2d, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         self.get_logger().info(f"Map {map_name} saved successfully!")
+        
+        # Sync radiation map save
+        self._native_radiation_mapper_trigger('/radiation_mapper/save_map')
 
     # COMMAND DISPATCHER
     def command_cb(self, msg):
@@ -223,9 +260,31 @@ class MissionManager(Node):
             mode = cmd_parts[1] if len(cmd_parts) > 1 else "lifelong"
             map_name = cmd_parts[2] if len(cmd_parts) > 2 else "none"
             threading.Thread(target=self._start_mission, args=(mode, map_name), daemon=True).start()
+            if map_name != "none":
+                # Automatically link radiation map context to SLAM map context
+                self._native_radiation_mapper_params(f"{map_name}_rad.npy", is_recording=False)
+                self._native_set_radiation(True)
         elif action == 'save_map':
             map_name = cmd_parts[1] if len(cmd_parts) > 1 else "new_map"
             threading.Thread(target=self._native_save_map, args=(map_name,), daemon=True).start()
+        elif action == 'rad_load':
+            map_name = cmd_parts[1] if len(cmd_parts) > 1 else "explored_map"
+            if not map_name.endswith('.npy'): map_name += '.npy'
+            self._native_radiation_mapper_params(map_name, is_recording=False)
+            self._native_radiation_server_params(map_name)
+        elif action == 'rad_record':
+            map_name = cmd_parts[1] if len(cmd_parts) > 1 else "explored_map"
+            if not map_name.endswith('.npy'): map_name += '.npy'
+            self._native_radiation_mapper_params(map_name, is_recording=True)
+            self._native_radiation_server_params("/dev/shm/live_rad_map.npy")
+        elif action == 'rad_save':
+            self._native_radiation_mapper_trigger('/radiation_mapper/save_map')
+        elif action == 'rad_clear':
+            self._native_radiation_mapper_trigger('/radiation_mapper/clear_map')
+        elif action == 'rad_on':
+            self._native_set_radiation(True)
+        elif action == 'rad_off':
+            self._native_set_radiation(False)
         else:
             self.get_logger().error(f"Unknown system command: '{cmd}'")
 
@@ -238,7 +297,8 @@ def main(args=None):
         node._stop_mission()
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

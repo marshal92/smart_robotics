@@ -38,11 +38,12 @@ watch(() => store.logs.length, async () => {
 
 <style scoped>
 .log-container {
-  background: #111; 
+  background: var(--console-bg, #111); 
   padding: 10px; 
   border-radius: 6px; 
-  border: 1px solid #333; 
+  border: 1px solid var(--console-border, #333); 
   margin-top: 20px;
+  transition: background 0.3s, border 0.3s;
 }
 .log-title {
   margin: 0 0 10px 0; 

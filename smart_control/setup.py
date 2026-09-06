@@ -30,6 +30,7 @@ setup(
             'nav_coordinator = smart_control.nav_coordinator:main',
             'telemetry_mux = smart_control.telemetry_mux:main',
             'tactical_executor = smart_control.tactical_executor:main',
+            'recovery_relocalizer = smart_control.recovery_relocalizer:main',
         ],
     },
 )

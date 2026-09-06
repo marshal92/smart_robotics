@@ -37,7 +37,7 @@ import RosConsole from './components/console/RosConsole.vue'
 .main-layout {
   display: flex;
   gap: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 0px;
 }
 
 .left-panel {
@@ -57,6 +57,11 @@ import RosConsole from './components/console/RosConsole.vue'
   }
   .right-panel {
     flex: 1 1 auto;
+  }
+}
+@media (max-width: 768px) {
+  #app-container {
+    padding: 0 10px;
   }
 }
 </style>

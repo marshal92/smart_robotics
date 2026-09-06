@@ -3,16 +3,22 @@
     <!-- absolute inset-0 prevents the canvas from stretching the parent -->
     <div id="viewer3d" class="dt-viewer"></div>
     
+    <!-- Fullscreen Button -->
+    <button class="fullscreen-btn" @click="toggleFullscreen" title="Fullscreen">⛶</button>
+    
     <!-- Bottom Control Panel -->
     <div class="dt-bottom-panel">
       
       <!-- Left: Coordinates -->
       <div class="dt-coords">
-        <div v-if="hoverCoords">
-          X: {{ hoverCoords.x.toFixed(2) }} <span>|</span> Y: {{ hoverCoords.y.toFixed(2) }}
+        <div v-if="hoverCoords" class="coord-line">
+          <span class="coord-lbl">Cur:</span> X: {{ hoverCoords.x.toFixed(2) }} <span>|</span> Y: {{ hoverCoords.y.toFixed(2) }}
         </div>
         <div v-else class="dt-coords-empty">
           Hover map...
+        </div>
+        <div v-if="robotCoords" class="coord-line" style="color: var(--accent); margin-top: 2px;">
+          <span class="coord-lbl">Rob:</span> X: {{ robotCoords.x.toFixed(2) }} <span>|</span> Y: {{ robotCoords.y.toFixed(2) }}
         </div>
       </div>
 
@@ -23,7 +29,7 @@
           <button 
             @click="toggle3DWorld"
             @contextmenu.prevent="showWorldMenu = !showWorldMenu"
-            :class="['dt-btn', show3DWorld ? 'dt-btn-active-purple' : 'dt-btn-inactive']"
+            :class="['dt-btn', show3DWorld ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
           >
             <span>3D View</span>
           </button>
@@ -32,13 +38,14 @@
             <div class="world-menu-item" @click="loadWorld('213')">213.sdf</div>
             <div class="world-menu-item" @click="loadWorld('kitchen')">kitchen.sdf</div>
             <div class="world-menu-item" @click="loadWorld('shelter_zero')">shelter_zero.sdf</div>
+            <div class="world-menu-item" @click="loadWorld('shelter_zero_empty')">shelter_zero_empty.sdf</div>
           </div>
         </div>
 
         <!-- Radiation Toggle -->
         <button 
           @click="toggleRadiation"
-          :class="['dt-btn', showRadiation ? 'dt-btn-active-orange' : 'dt-btn-inactive']"
+          :class="['dt-btn', showRadiation ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
         >
           <span>Radiation</span>
         </button>
@@ -54,7 +61,7 @@
         <!-- Shadow Toggle -->
         <button 
           @click="toggleShadow"
-          :class="['dt-btn', showShadowRobot ? 'dt-btn-active-purple' : 'dt-btn-inactive']"
+          :class="['dt-btn', showShadowRobot ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
         >
           <span>Shadow</span>
         </button>
@@ -62,7 +69,7 @@
         <!-- Nav Goal Toggle -->
         <button 
           @click="toggleNavMode"
-          :class="['dt-btn', isNavMode ? 'dt-btn-active-green' : 'dt-btn-inactive']"
+          :class="['dt-btn', isNavMode ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
         >
           <span>{{ isNavMode ? 'Click & Drag...' : 'Nav Goal' }}</span>
         </button>
@@ -90,12 +97,25 @@ const store = useRosStore()
 const viewerInitialized = ref(false)
 const hoverCoords = ref(null)
 const isNavMode = ref(false)
-const showWaypoints = ref(true)
+const showWaypoints = ref(false)
 const showRadiation = ref(false)
-const show3DWorld = ref(true)
-const showShadowRobot = ref(true)
+const show3DWorld = ref(false)
+const showShadowRobot = ref(false)
 const showWorldMenu = ref(false)
 const wrapper = ref(null)
+const robotCoords = ref(null)
+
+const toggleFullscreen = () => {
+  if (!document.fullscreenElement) {
+    if (wrapper.value.requestFullscreen) {
+      wrapper.value.requestFullscreen()
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen()
+    }
+  }
+}
 
 let viewer = null
 let tfClient = null
@@ -273,13 +293,20 @@ function initViewer() {
   const initWidth = rect.width || 800
   const initHeight = rect.height || 500
 
+  const isLight = document.documentElement.classList.contains('light-theme')
   viewer = new ROS3D.Viewer({
     divID: 'viewer3d',
     width: initWidth,
     height: initHeight,
     antialias: true,
-    background: '#111111',
+    background: isLight ? '#555555' : '#111111',
     displayPanAndZoomFrame: false
+  })
+  
+  window.addEventListener('theme-changed', (e) => {
+    if (viewer && viewer.renderer) {
+      viewer.renderer.setClearColor(e.detail ? 0x555555 : 0x111111)
+    }
   })
   
   // Safe resize listener that reacts to flexbox stretching
@@ -385,6 +412,7 @@ function initViewer() {
   const updateRobotPose = (tf) => {
     robotGroup.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
     robotGroup.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
+    robotCoords.value = { x: tf.translation.x, y: tf.translation.y }
   }
   
   tfClient.subscribe('base_link', updateRobotPose)
@@ -539,8 +567,21 @@ function initViewer() {
   function getMapIntersection(event) {
     if (!mapPlane) return null
     const rect = container.getBoundingClientRect()
-    mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1
-    mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1
+    let clientX = event.clientX
+    let clientY = event.clientY
+    
+    if (event.touches && event.touches.length > 0) {
+      clientX = event.touches[0].clientX
+      clientY = event.touches[0].clientY
+    } else if (event.changedTouches && event.changedTouches.length > 0) {
+      clientX = event.changedTouches[0].clientX
+      clientY = event.changedTouches[0].clientY
+    }
+
+    if (clientX === undefined || clientY === undefined) return null
+
+    mouse.x = ((clientX - rect.left) / container.clientWidth) * 2 - 1
+    mouse.y = -((clientY - rect.top) / container.clientHeight) * 2 + 1
     
     raycaster.setFromCamera(mouse, viewer.camera)
     const intersects = raycaster.intersectObject(mapPlane)
@@ -557,7 +598,9 @@ function initViewer() {
 
     if (isNavMode.value && dragStartPoint) {
       event.stopPropagation() // Prevent OrbitControls rotation while dragging arrow
+      event.preventDefault()
       
+      const point = getMapIntersection(event)
       const dx = (point ? point.x : hoverCoords.value?.x || dragStartPoint.x) - dragStartPoint.x
       const dy = (point ? point.y : hoverCoords.value?.y || dragStartPoint.y) - dragStartPoint.y
       const length = Math.sqrt(dx*dx + dy*dy)
@@ -568,10 +611,10 @@ function initViewer() {
         navGoalArrow.visible = true
       }
     }
-  }, true)
+  }, { passive: false })
 
-  container.addEventListener('mousedown', (event) => {
-    if (event.button !== 0 || !isNavMode.value) return 
+  const handleDragStart = (event) => {
+    if ((event.button !== undefined && event.button !== 0) || !isNavMode.value) return 
     
     const point = getMapIntersection(event)
     if (point) {
@@ -582,9 +625,15 @@ function initViewer() {
       navGoalArrow.setLength(0.5, 0.4, 0.2) 
       navGoalArrow.visible = true
     }
-  }, true)
+  }
 
-  container.addEventListener('mouseup', (event) => {
+  container.addEventListener('mousedown', handleDragStart, true)
+  container.addEventListener('touchstart', (e) => {
+    if (isNavMode.value) e.preventDefault()
+    handleDragStart(e)
+  }, { passive: false })
+
+  const handleDragEnd = (event) => {
     if (isNavMode.value && dragStartPoint) {
       event.stopPropagation() // Prevent OrbitControls issues on release
       
@@ -624,7 +673,13 @@ function initViewer() {
       navGoalArrow.visible = false
       toggleNavMode() 
     }
-  }, true)
+  }
+
+  container.addEventListener('mouseup', handleDragEnd, true)
+  container.addEventListener('touchend', (e) => {
+    if (isNavMode.value) e.preventDefault()
+    handleDragEnd(e)
+  }, { passive: false })
 
   // 7. Parse Smart Waypoints Markers
   const waypointSub = new ROSLIB.Topic({
@@ -800,6 +855,28 @@ function initViewer() {
   border: 1px solid #333;
 }
 
+.fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: 0.2s;
+  z-index: 100;
+}
+.fullscreen-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
 .dt-viewer {
   position: absolute;
   top: 0;
@@ -815,14 +892,15 @@ function initViewer() {
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(20, 20, 20, 0.85);
+  background: var(--dt-panel-bg);
   backdrop-filter: blur(8px);
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--console-border, #333);
   padding: 10px 15px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   z-index: 10;
+  transition: background 0.3s, border-color 0.3s;
 }
 
 .dt-coords {
@@ -856,18 +934,18 @@ function initViewer() {
 }
 
 .dt-btn-inactive {
-  background: #333;
-  color: #aaa;
-  border-color: #444;
+  background: var(--btn-bg);
+  color: var(--text);
+  border-color: var(--input-border);
 }
 .dt-btn-inactive:hover {
-  background: #444;
+  background: var(--input-bg);
 }
 
-.dt-btn-active-purple { background: #5e35b1; color: white; border-color: #7e57c2; box-shadow: 0 0 8px rgba(94, 53, 177, 0.5); }
-.dt-btn-active-orange { background: #e65100; color: white; border-color: #ff9800; box-shadow: 0 0 8px rgba(230, 81, 0, 0.5); }
-.dt-btn-active-blue { background: #1976d2; color: white; border-color: #42a5f5; box-shadow: 0 0 8px rgba(25, 118, 210, 0.5); }
-.dt-btn-active-green { background: #00796b; color: white; border-color: #26a69a; box-shadow: 0 0 8px rgba(0, 121, 107, 0.5); }
+.dt-btn-active-blue { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 0 8px rgba(25, 118, 210, 0.5); }
+
+.coord-line { font-size: 11px; }
+.coord-lbl { opacity: 0.7; font-size: 10px; }
 
 .dt-nav-hint {
   position: absolute;

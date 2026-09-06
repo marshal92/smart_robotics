@@ -7,24 +7,49 @@
   --red: #d32f2f; 
   --orange: #f57c00; 
   --dark-bg: #2a2a2a;
+  --input-bg: #333;
+  --input-border: #555;
+  --input-text: white;
+  --btn-bg: #555555;
+  --btn-text: white;
+  --console-bg: #111111;
+  --console-border: #333333;
+  --dt-panel-bg: rgba(20, 20, 20, 0.85);
 }
+
+html.light-theme {
+  --bg-color: #f5f5f5; 
+  --panel-bg: #ffffff; 
+  --text: #222222;
+  --dark-bg: #e0e0e0;
+  --input-bg: #ffffff;
+  --input-border: #cccccc;
+  --input-text: #222222;
+  --btn-bg: #d4d4d4;
+  --btn-text: #111111;
+  --console-bg: #ffffff;
+  --console-border: #cccccc;
+  --dt-panel-bg: rgba(255, 255, 255, 0.85);
+}
+
 body { 
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
   background: var(--bg-color); 
   color: var(--text); 
   padding: 20px; 
   margin: 0; 
+  transition: background 0.3s, color 0.3s;
 }
 
 /* Blocks & Tabs */
-.block-container { background: var(--dark-bg); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #444; }
-.block-title { margin-top: 0; margin-bottom: 15px; font-size: 18px; color: #aaa; border-bottom: 1px solid #555; padding-bottom: 5px; }
+.block-container { background: var(--dark-bg); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--input-border); transition: background 0.3s, border 0.3s; }
+.block-title { margin-top: 0; margin-bottom: 15px; font-size: 18px; color: var(--text); border-bottom: 1px solid var(--input-border); padding-bottom: 5px; opacity: 0.8; }
 
 /* Grids and Buttons */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
-.cmd-btn { padding: 15px; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; color: white; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: 0.1s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; position: relative;}
+.cmd-btn { padding: 15px; border: none; border-radius: 6px; font-size: 15px; font-weight: bold; color: var(--btn-text); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.2); transition: background 0.3s, color 0.3s, transform 0.1s; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; position: relative;}
 .cmd-btn span { font-size: 11px; opacity: 0.8; font-weight: normal; text-align: center;}
 .cmd-btn:active { transform: scale(0.95); }
-.c-green { background: var(--green); } .c-blue { background: var(--accent); } .c-red { background: var(--red); } .c-orange { background: var(--orange); } .c-gray { background: #555; } .c-purple { background: #7b1fa2; }
+.c-green { background: var(--green); color: white; } .c-blue { background: var(--accent); color: white; } .c-red { background: var(--red); color: white; } .c-orange { background: var(--orange); color: white; } .c-gray { background: var(--btn-bg); color: var(--btn-text); } .c-purple { background: #7b1fa2; color: white; }
 
-input[type="text"], input[type="number"], input[type="range"] { background: #333; border: 1px solid #555; color: white; padding: 8px 12px; border-radius: 4px; font-size: 14px; }
+input[type="text"], input[type="number"], input[type="range"] { background: var(--input-bg); border: 1px solid var(--input-border); color: var(--input-text); padding: 8px 12px; border-radius: 4px; font-size: 14px; transition: background 0.3s, color 0.3s, border 0.3s;}

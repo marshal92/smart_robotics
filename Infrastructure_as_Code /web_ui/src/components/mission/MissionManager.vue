@@ -1,6 +1,6 @@
 <template>
-  <div class="block-container">
-    <h3 class="block-title">Block 2: Navigation & Waypoints</h3>
+  <div class="block-container mission-block">
+    <h3 class="block-title mission-title">Block 2: Navigation & Waypoints</h3>
     
     <WaypointCreator activeMissionTab="global" />
   </div>
@@ -11,5 +11,13 @@ import WaypointCreator from './WaypointCreator.vue'
 </script>
 
 <style scoped>
-/* Inherits global styles from style.css */
+.mission-block {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  padding: 10px 15px;
+}
+.mission-title {
+  border-bottom: none;
+  margin-bottom: 5px;
+}
 </style>

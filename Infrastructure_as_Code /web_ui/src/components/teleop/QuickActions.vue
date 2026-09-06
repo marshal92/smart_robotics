@@ -11,7 +11,7 @@
     <div class="quick-actions-grid" v-if="activeTab === 'action'">
       <button class="compact-btn c-orange" @click="setLight(true)">Light ON</button>
       <button class="compact-btn c-gray" @click="setLight(false)">Light OFF</button>
-      <button class="compact-btn c-purple" @click="mockSample">Sampling Protocol</button>
+      <button class="compact-btn c-blue" @click="mockSample">Sampling Protocol</button>
     </div>
     
     <!-- Nav Tab -->

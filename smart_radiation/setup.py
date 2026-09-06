@@ -12,6 +12,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'maps'), glob('maps/*.npy')),
     ],
     install_requires=['setuptools'],
@@ -32,6 +33,8 @@ setup(
             'dose_logger = smart_radiation.dose_logger:main',
             'generate_map = smart_radiation.generate_map:main',
             'view_map = smart_radiation.view_map:main',
+            'radiation_mapper = smart_radiation.radiation_mapper:main',
+            'ground_truth_logger = smart_radiation.ground_truth_logger:main',
         ],
     },
 )

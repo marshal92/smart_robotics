@@ -14,7 +14,7 @@
     </div>
     <div class="hud-item">
       <span class="hud-label">Nav Status</span>
-      <span class="hud-val" style="color: #aaa;">{{ store.telemetry.nav_status }}</span>
+      <span class="hud-val" style="color: var(--text);">{{ store.telemetry.nav_status }}</span>
     </div>
     <div class="hud-item">
       <span class="hud-label">Light</span>
@@ -35,7 +35,7 @@ const fsmColor = computed(() => {
   if (state === 'WARNING') return 'var(--orange)'
   if (state === 'EVACUATING') return 'var(--red)'
   if (state === 'SAFE_HOLD') return '#3b82f6'
-  if (state === 'DISABLED') return '#aaaaaa'
+  if (state === 'DISABLED') return 'var(--text)'
   return 'var(--accent)'
 })
 </script>
@@ -48,7 +48,7 @@ const fsmColor = computed(() => {
   align-items: center;
 }
 .hud-item { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 80px;}
-.hud-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 1px;}
+.hud-label { font-size: 11px; color: var(--text); opacity: 0.8; text-transform: uppercase; letter-spacing: 1px;}
 .hud-val { font-size: 18px; font-weight: bold; color: var(--accent); font-family: monospace;}
 
 .light-icon {

@@ -88,7 +88,7 @@ void RadiationLayer::updateCosts(
       int8_t rad_value = latest_rad_map_->data[rad_y * width + rad_x];
       if (rad_value <= 0) continue;
 
-      unsigned char rad_cost = static_cast<unsigned char>((rad_value * 252) / 100);
+      unsigned char rad_cost = static_cast<unsigned char>((rad_value * 220) / 100);
 
       unsigned char final_cost = std::max(current_cost, rad_cost);
       

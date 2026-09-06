@@ -16,7 +16,6 @@ class PayloadManager(Node):
         
         self.create_subscription(Bool, '/cmd_light', self.light_cb, 10)
         self.create_subscription(SmartCommand, '/smart_command', self.cmd_cb, 10)
-        #self.create_subscription(String, '/payload/command', self.cmd_cb, 10)
         
         self.status_pub = self.create_publisher(String, '/payload/status', 10)
         
