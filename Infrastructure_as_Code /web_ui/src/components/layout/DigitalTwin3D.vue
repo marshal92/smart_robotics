@@ -300,12 +300,24 @@ function initViewer() {
     height: initHeight,
     antialias: true,
     background: isLight ? '#555555' : '#111111',
+    near: 0.1,
+    far: 200,
     displayPanAndZoomFrame: false
   })
+
+  // Force the canvas into its own GPU compositing layer.
+  // ros3d hardcodes alpha:true in WebGLRenderer, causing the browser to
+  // blend the canvas with the HTML background → milky haze.
+  // Forcing a compositing layer isolates the canvas from page compositing,
+  // which is the same reason a transparent overlay "fixed" the image.
+  const canvas = viewer.renderer.domElement
+  canvas.style.willChange = 'transform'
+  canvas.style.transform = 'translateZ(0)'
+  canvas.style.backfaceVisibility = 'hidden'
   
   window.addEventListener('theme-changed', (e) => {
     if (viewer && viewer.renderer) {
-      viewer.renderer.setClearColor(e.detail ? 0x555555 : 0x111111)
+      viewer.renderer.setClearColor(e.detail ? 0x555555 : 0x111111, 1.0)
     }
   })
   
@@ -339,10 +351,10 @@ function initViewer() {
   // Setting a proper position gives the light a direction (normalize preserves it).
   viewer.scene.traverse(child => {
     if (child.type === 'AmbientLight') {
-      child.color.setHex(0x444444) // Softer ambient
+      child.color.setHex(0x555555) // Slightly brighter ambient for better fill
     }
     if (child.type === 'DirectionalLight') {
-      child.intensity = 0.6
+      child.intensity = 0.8
       child.position.set(10, 10, 20) // Good angle for shadows
       
       child.castShadow = true
@@ -358,6 +370,12 @@ function initViewer() {
     }
   })
   
+  // Add fill light from opposite side for nice highlights on glossy surfaces
+  // Subtle fill from opposite side — just enough for rim highlights, not glare
+  const fillLight = new THREE.DirectionalLight(0x8899bb, 0.2)
+  fillLight.position.set(-8, -5, 12)
+  viewer.scene.add(fillLight)
+
   const robotGroup = new THREE.Group()
   viewer.scene.add(robotGroup)
   
@@ -369,11 +387,15 @@ function initViewer() {
       // Fix missing normals from raw STL
       geometry.computeVertexNormals()
       
-      const material = new THREE.MeshStandardMaterial({ 
-        color: 0x1144aa,
-        emissive: 0x0a1840,
-        roughness: 0.6,
-        metalness: 0.2,
+      const material = new THREE.MeshPhysicalMaterial({ 
+        color: 0x1976d2,          // Vivid blue
+        emissive: 0x1565c0,       // Blue self-illumination to fight wash
+        emissiveIntensity: 0.25,
+        roughness: 0.25,          // Glossy
+        metalness: 0.6,           // Metallic sheen
+        clearcoat: 0.8,           // Clearcoat gloss layer (toned down)
+        clearcoatRoughness: 0.15,
+        reflectivity: 0.7,
         depthWrite: true,
         depthTest: true
       })
@@ -885,6 +907,18 @@ function initViewer() {
   bottom: 0;
   width: 100%;
   height: 100%;
+  background-color: #111111;
+  isolation: isolate;
+}
+.dt-viewer canvas {
+  display: block;
+  background-color: #111111 !important;
+  opacity: 1 !important;
+  mix-blend-mode: normal !important;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .dt-bottom-panel {
