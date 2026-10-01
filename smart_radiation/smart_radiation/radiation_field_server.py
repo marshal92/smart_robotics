@@ -14,11 +14,13 @@ from ament_index_python.packages import get_package_share_directory
 
 class RadiationFieldServer(Node):
     def __init__(self):
-        super().__init__('radiation_field_server')
+        from rclpy.parameter import Parameter
+        super().__init__('radiation_field_server', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, False)])
+        self.set_parameters([Parameter('use_sim_time', Parameter.Type.BOOL, False)])
 
-        self.d_noise = 5.0       
+        self.d_noise = 50.0       
         self.d_crit = 1000.0     
-        self.k = 5.0             
+        self.k = 10.0             
 
         self.declare_parameter('map_path', 'explored_map.npy')
         map_path_param = self.get_parameter('map_path').value
@@ -178,7 +180,7 @@ class RadiationFieldServer(Node):
 
         rad_msg = OccupancyGrid()
         rad_msg.header = self.last_map_msg.header
-        rad_msg.header.stamp = self.get_clock().now().to_msg()
+        rad_msg.header.stamp = self.last_map_msg.header.stamp
         rad_msg.info = self.last_map_msg.info
         rad_msg.data = final_grid.flatten().tolist()
         
@@ -204,11 +206,42 @@ class RadiationFieldServer(Node):
             img_msg.data = encoded_image.tobytes()
             self.image_pub.publish(img_msg)
 
+def strip_sim_time(args):
+    if args is None:
+        import sys
+        args = sys.argv
+    clean_args = []
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == '--ros-args':
+            clean_args.append(arg)
+        elif arg == '-p' or arg == '--param':
+            clean_args.append(arg)
+        elif arg.startswith('use_sim_time:='):
+            if len(clean_args) > 0 and clean_args[-1] in ('-p', '--param'):
+                clean_args.pop()
+        elif arg == 'use_sim_time':
+            if len(clean_args) > 0 and clean_args[-1] in ('-p', '--param'):
+                clean_args.pop()
+            skip_next = True
+        else:
+            clean_args.append(arg)
+    return clean_args
+
 def main(args=None):
-    rclpy.init(args=args)
+    clean_args = strip_sim_time(args)
+    rclpy.init(args=clean_args)
     node = RadiationFieldServer()
     try:
-        rclpy.spin(node)
+        import time
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.1)
+            time.sleep(0.05)
+    except KeyboardInterrupt:
+        pass
     finally:
         node.destroy_node()
         if rclpy.ok():

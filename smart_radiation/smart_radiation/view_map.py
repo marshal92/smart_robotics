@@ -3,28 +3,45 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 import os
-from ament_index_python.packages import get_package_share_directory # Import gor dynamically finding the package share directory
+import json
+import argparse
 
-# Dynamically find the package share directory
-pkg_share = get_package_share_directory('smart_radiation')
-fallback_path = os.path.join(pkg_share, 'maps', 'radiation_map.npy')
+try:
+    from ament_index_python.packages import get_package_share_directory
+    pkg_share = get_package_share_directory('smart_radiation')
+except Exception:
+    pkg_share = os.path.expanduser('~/ros2_ws/src/smart_robotics/smart_radiation')
 
-# Hardpath if required (uncomment the following line and comment the above two lines)
-# fallback_path = os.path.expanduser('~/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map.npy')
+parser = argparse.ArgumentParser(description="View Radiation Map")
+parser.add_argument('-m', '--map', type=str, default='radiation_map_complex', help='Name of the map (without .npy)')
+args = parser.parse_args()
 
-if os.path.exists(fallback_path):
-    filename = fallback_path
-else:
-    print(f"Error: File {fallback_path} not found. Please run generate_map.py first!")
-    exit()
+map_base_path = os.path.join(pkg_share, 'maps', args.map)
+if not os.path.exists(map_base_path + '.npy'):
+    # fallback to src folder if using install space but the map is in src
+    map_base_path = os.path.join(os.path.expanduser('~/ros2_ws/src/smart_robotics/smart_radiation/maps'), args.map)
 
-dose_map = np.load(filename)
+npy_path = map_base_path + '.npy'
+json_path = map_base_path + '_meta.json'
+
+if not os.path.exists(npy_path):
+    print(f"Error: File {npy_path} not found. Please run generate_map.py first!")
+    exit(1)
+
+dose_map = np.load(npy_path)
 
 res = 0.05
-ox = -5.0024
-oy = -4.63
-height, width = dose_map.shape
+ox = -10.0
+oy = -10.0
 
+if os.path.exists(json_path):
+    with open(json_path, 'r') as f:
+        meta = json.load(f)
+        res = meta.get('res', res)
+        ox = meta.get('ox', ox)
+        oy = meta.get('oy', oy)
+
+height, width = dose_map.shape
 extent = [ox, ox + width * res, oy, oy + height * res]
 
 fig = plt.figure(figsize=(16, 6))

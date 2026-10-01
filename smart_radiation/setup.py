@@ -13,7 +13,7 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
-        (os.path.join('share', package_name, 'maps'), glob('maps/*.npy')),
+        (os.path.join('share', package_name, 'maps'), glob('maps/*.npy') + glob('maps/*.json') + glob('maps/*.csv')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -29,12 +29,14 @@ setup(
     entry_points={
         'console_scripts': [
             'radiation_field_server = smart_radiation.radiation_field_server:main',
+            'baseline_field_server = smart_radiation.baseline_field_server:main',
             'virtual_geiger = smart_radiation.virtual_geiger:main',
             'dose_logger = smart_radiation.dose_logger:main',
             'generate_map = smart_radiation.generate_map:main',
             'view_map = smart_radiation.view_map:main',
             'radiation_mapper = smart_radiation.radiation_mapper:main',
             'ground_truth_logger = smart_radiation.ground_truth_logger:main',
+            'radiation_run_logger = smart_radiation.radiation_run_logger:main',
         ],
     },
 )

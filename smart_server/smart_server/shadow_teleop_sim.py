@@ -14,9 +14,10 @@ import numpy as np
 from ament_index_python.packages import get_package_share_directory
 from smart_interfaces.msg import SmartCommand # ИМПОРТ НОВОГО СООБЩЕНИЯ
 
-class ShadowTeleopSim(Node):
-    def __init__(self):
-        super().__init__('shadow_teleop')
+class ShadowTeleopSimWorker(Node):
+    def __init__(self, use_sim_time=True):
+        from rclpy.parameter import Parameter
+        super().__init__('shadow_teleop_worker', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, use_sim_time)])
         self._running = True
 
         cmd_qos   = QoSProfile(depth=5)
@@ -38,8 +39,8 @@ class ShadowTeleopSim(Node):
         # НОВЫЙ ПАБЛИШЕР: Отправляем готовый маршрут на робота
         self.smart_cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
 
-        self.tf_buffer   = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.tf_buffer   = None
+        self.tf_listener = None
 
         pkg = get_package_share_directory('smart_server')
         self.mesh_uri = f"file://{pkg}/meshes/shadow.STL"
@@ -75,10 +76,13 @@ class ShadowTeleopSim(Node):
         self._last_real_ns = None   
         self.latest_sim_time_msg = None
 
+        self.tf_buffer   = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
         self._loop_thread = threading.Thread(target=self._real_time_loop, daemon=True, name='shadow_loop')
         self._loop_thread.start()
 
-        self.get_logger().info("[Server] Shadow Teleop Sim Started (SmartCommand Mode)")
+        self.get_logger().info("[Server] Shadow Teleop Worker Started")
 
     def _real_time_loop(self):
         period = 1.0 / 30.0
@@ -300,14 +304,59 @@ class ShadowTeleopSim(Node):
             self.path_pub.publish(self.path_msg)
             self._path_dirty = False
 
+class ShadowParamNode(Node):
+    def __init__(self, executor):
+        super().__init__('shadow_teleop')
+        
+        # We manually fetch worker_use_sim_time passed from the launch file
+        # The launch file sets our own use_sim_time to False to avoid CPU burn
+        self.declare_parameter('worker_use_sim_time', True)
+        self.sim_time = self.get_parameter('worker_use_sim_time').value
+
+        self.declare_parameter('is_active', False)
+        self.is_active = self.get_parameter('is_active').value
+        self.worker_node = None
+        self.executor_ref = executor
+        
+        self.add_on_set_parameters_callback(self.param_cb)
+        self.get_logger().info("[Server] Shadow Teleop Manager Started (Idle CPU = 0%)")
+        self._toggle_worker(self.is_active)
+
+    def param_cb(self, params):
+        from rcl_interfaces.msg import SetParametersResult
+        for param in params:
+            if param.name == 'is_active':
+                self.is_active = param.value
+                self._toggle_worker(self.is_active)
+        return SetParametersResult(successful=True)
+
+    def _toggle_worker(self, active):
+        if active and self.worker_node is None:
+            self.get_logger().info("Spawning Shadow Worker (Enabling Subscriptions/TF)")
+            self.worker_node = ShadowTeleopSimWorker(use_sim_time=self.sim_time)
+            self.executor_ref.add_node(self.worker_node)
+        elif not active and self.worker_node is not None:
+            self.get_logger().info("Destroying Shadow Worker (Releasing CPU to 0%)")
+            self.executor_ref.remove_node(self.worker_node)
+            self.worker_node._running = False
+            self.worker_node._loop_thread.join(timeout=1.0)
+            self.worker_node.destroy_node()
+            self.worker_node = None
+
 def main(args=None):
     rclpy.init(args=args)
-    node = ShadowTeleopSim()
+    executor = rclpy.executors.MultiThreadedExecutor()
+    param_node = ShadowParamNode(executor)
+    executor.add_node(param_node)
+    
     try:
-        rclpy.spin(node)
+        executor.spin()
     finally:
-        node._running = False
-        node.destroy_node()
+        if param_node.worker_node is not None:
+            param_node.worker_node._running = False
+            param_node.worker_node._loop_thread.join(timeout=1.0)
+            param_node.worker_node.destroy_node()
+        param_node.destroy_node()
         rclpy.shutdown()
 
 if __name__ == '__main__':

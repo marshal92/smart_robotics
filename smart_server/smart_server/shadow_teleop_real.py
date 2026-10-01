@@ -29,8 +29,8 @@ class ShadowTeleopReal(Node):
         # НОВЫЙ ПАБЛИШЕР: Отправляем готовый маршрут на робота
         self.smart_cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
 
-        self.tf_buffer   = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
+        self.tf_buffer   = None
+        self.tf_listener = None
 
         pkg = get_package_share_directory('smart_server')
         self.mesh_uri = f"file://{pkg}/meshes/shadow.STL"
@@ -69,10 +69,31 @@ class ShadowTeleopReal(Node):
         self._ui_counter = 0
         self.last_time   = self.get_clock().now()
 
+        self.declare_parameter('is_active', False)
+        self.is_active = self.get_parameter('is_active').value
+        self.add_on_set_parameters_callback(self.param_cb)
+
         # ROS 2 timer (only for real-time)
         self.timer = self.create_timer(1.0 / 30.0, self.update_loop)
 
         self.get_logger().info("[Server] Shadow Node Started (REAL ROBOT MODE, SmartCommand routing)")
+
+    def param_cb(self, params):
+        from rcl_interfaces.msg import SetParametersResult
+        for param in params:
+            if param.name == 'is_active':
+                self.is_active = param.value
+                self.get_logger().info(f"Shadow Teleop active set to: {self.is_active}")
+                if self.is_active:
+                    if getattr(self, 'tf_listener', None) is None:
+                        self.tf_buffer = Buffer()
+                        self.tf_listener = TransformListener(self.tf_buffer, self)
+                else:
+                    if getattr(self, 'tf_listener', None) is not None:
+                        self.tf_listener.unregister()
+                        self.tf_listener = None
+                        self.tf_buffer = None
+        return SetParametersResult(successful=True)
 
     def costmap_cb(self, msg: OccupancyGrid):
         self._costmap_info  = msg.info
@@ -196,6 +217,9 @@ class ShadowTeleopReal(Node):
         dt      = (now - self.last_time).nanoseconds / 1e9
         self.last_time = now
         stamp   = now.to_msg()
+
+        if not getattr(self, 'is_active', False):
+            return
 
         self.update_robot_pose()
 

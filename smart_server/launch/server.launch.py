@@ -46,7 +46,7 @@ def generate_launch_description():
         name='shadow_teleop',
         output='screen',
         condition=IfCondition(use_sim_time),
-        parameters=[{'use_sim_time': use_sim_time}]
+        parameters=[{'use_sim_time': False, 'worker_use_sim_time': use_sim_time}]
     )
 
     shadow_teleop_real_node = Node(

@@ -33,7 +33,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'map_path': LaunchConfiguration('map_path'),
-            'use_sim_time': use_sim_time
+            'use_sim_time': False
         }]
     )
 
@@ -44,7 +44,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'map_path': LaunchConfiguration('map_path'),
-            'use_sim_time': use_sim_time
+            'use_sim_time': False,
+            'worker_use_sim_time': use_sim_time
         }]
     )
 
@@ -62,7 +63,7 @@ def generate_launch_description():
         name='virtual_geiger',
         output='screen',
         condition=IfCondition(LaunchConfiguration('use_virtual_geiger')),
-        parameters=[{'use_sim_time': use_sim_time}]
+        parameters=[{'use_sim_time': False, 'worker_use_sim_time': use_sim_time}]
     )
 
     return LaunchDescription([

@@ -12,9 +12,10 @@ import time
 import json
 from ament_index_python.packages import get_package_share_directory
 
-class RadiationMapper(Node):
-    def __init__(self):
-        super().__init__('radiation_mapper')
+class RadiationMapperWorker(Node):
+    def __init__(self, use_sim_time=True):
+        from rclpy.parameter import Parameter
+        super().__init__('radiation_mapper_worker', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, use_sim_time)])
 
         self.declare_parameter('map_path', 'explored_map.npy')
         self.map_path_param = self.get_parameter('map_path').value
@@ -45,7 +46,9 @@ class RadiationMapper(Node):
         self._load_map()
 
         self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self.tf_listener = None
+        if self.is_recording:
+            self._enable_tf()
 
         self.dose_sub = self.create_subscription(Float32, '/radiation/dose', self.dose_cb, 10)
         self.trigger_pub = self.create_publisher(Empty, '/radiation/map_updated', 10)
@@ -63,14 +66,29 @@ class RadiationMapper(Node):
 
         self.get_logger().info(f"Radiation Mapper started. Recording: {self.is_recording}")
 
+    def _enable_tf(self):
+        if self.tf_listener is None:
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+            self.get_logger().info("TF Listener enabled")
+
+    def _disable_tf(self):
+        if self.tf_listener is not None:
+            # Destroy the listener to unsubscribe from /tf
+            self.tf_listener.unregister() if hasattr(self.tf_listener, 'unregister') else None
+            self.tf_listener = None
+            self.get_logger().info("TF Listener disabled")
+
     def param_callback(self, params):
         for param in params:
             if param.name == 'is_recording':
                 self.is_recording = param.value
                 self.get_logger().info(f"Recording state changed to: {self.is_recording}")
                 if self.is_recording:
+                    self._enable_tf()
                     self.map_dirty = True
                     self._timer_shm_update()
+                else:
+                    self._disable_tf()
             elif param.name == 'map_path':
                 new_path = param.value
                 if new_path != self.map_path_param:
@@ -275,18 +293,94 @@ class RadiationMapper(Node):
         self.map_dirty = True
         self.get_logger().debug(f"Blended spot at ({rad_x}, {rad_y})")
 
+class RadiationMapperManager(Node):
+    def __init__(self):
+        from rclpy.parameter import Parameter
+        super().__init__('radiation_mapper', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, False)])
+        
+        self.declare_parameter('worker_use_sim_time', True)
+        self.worker_sim_time = self.get_parameter('worker_use_sim_time').value
+        self.declare_parameter('is_recording', False)
+        
+        self.worker = None
+        self.executor_thread = None
+        self.executor = None
+        
+        self.add_on_set_parameters_callback(self.param_callback)
+        self.set_parameters([Parameter('use_sim_time', Parameter.Type.BOOL, False)])
+        self.get_logger().info("Radiation Mapper Manager started (Idle CPU = 0%)")
+        self._apply_state(self.get_parameter('is_recording').value)
+
+    def _apply_state(self, is_recording):
+        if is_recording and self.worker is None:
+            self.worker = RadiationMapperWorker(use_sim_time=self.worker_sim_time)
+            self.executor = rclpy.executors.SingleThreadedExecutor()
+            self.executor.add_node(self.worker)
+            self.executor_thread = __import__('threading').Thread(target=self.executor.spin, daemon=True)
+            self.executor_thread.start()
+        elif not is_recording and self.worker is not None:
+            self.worker._save_map()
+            self.executor.shutdown()
+            self.executor_thread.join()
+            self.worker.destroy_node()
+            self.worker = None
+            self.executor = None
+
+    def param_callback(self, params):
+        for param in params:
+            if param.name == 'is_recording':
+                self._apply_state(param.value)
+            elif self.worker is not None:
+                if param.name == 'map_path':
+                    self.worker.map_path_param = param.value
+                    self.worker._resolve_paths(param.value)
+                    self.worker._load_map()
+        return SetParametersResult(successful=True)
+
+def strip_sim_time(args):
+    if args is None:
+        import sys
+        args = sys.argv
+    clean_args = []
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == '--ros-args':
+            clean_args.append(arg)
+        elif arg == '-p' or arg == '--param':
+            clean_args.append(arg)
+        elif arg.startswith('use_sim_time:='):
+            if len(clean_args) > 0 and clean_args[-1] in ('-p', '--param'):
+                clean_args.pop()
+        elif arg == 'use_sim_time':
+            if len(clean_args) > 0 and clean_args[-1] in ('-p', '--param'):
+                clean_args.pop()
+            skip_next = True
+        else:
+            clean_args.append(arg)
+    return clean_args
+
 def main(args=None):
-    rclpy.init(args=args)
-    node = RadiationMapper()
+    clean_args = strip_sim_time(args)
+    rclpy.init(args=clean_args)
+    manager = RadiationMapperManager()
     try:
-        rclpy.spin(node)
+        import time
+        while rclpy.ok():
+            rclpy.spin_once(manager, timeout_sec=0.1)
+            time.sleep(0.05)
     except KeyboardInterrupt:
         pass
     finally:
-        node._save_map()
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        if manager.worker is not None:
+            manager.worker._save_map()
+            manager.executor.shutdown()
+            manager.executor_thread.join()
+            manager.worker.destroy_node()
+        manager.destroy_node()
+        if rclpy.ok(): rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

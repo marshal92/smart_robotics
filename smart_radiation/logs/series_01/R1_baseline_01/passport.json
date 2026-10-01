@@ -1,0 +1,135 @@
+{
+  "logger_version": 2,
+  "created_utc": "2026-09-30T20:03:19.973557+00:00",
+  "arguments": {
+    "self_test": false,
+    "session": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/config/experiment.yaml",
+    "repeat": 1,
+    "monitor_name": [
+      "planner_server",
+      "controller_server",
+      "bt_navigator",
+      "velocity_smoother",
+      "collision_monitor",
+      "component_container",
+      "component_container_mt",
+      "component_container_isolated",
+      "radiation_mapper",
+      "virtual_geiger",
+      "baseline_field_server"
+    ],
+    "field": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy",
+    "meta": null,
+    "unit": "uSv/h",
+    "nav_config": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml",
+    "method": "baseline",
+    "route": "R1",
+    "goal": [
+      6.0,
+      22.0,
+      0.0
+    ],
+    "output": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/logs/series_01/R1_baseline_01",
+    "notes": "reflex=off; записать состояние GUI/видеозаписи и оборудование; threshold=500; occupancy_cost=87; подтвердить рабочие значения",
+    "attach": [],
+    "revision": "v1.0",
+    "capture_node": [
+      "/radiation_field_server"
+    ],
+    "frame": "map",
+    "robot_frame": "base_footprint",
+    "plan_topic": "/plan",
+    "hz": 10.0,
+    "max_gap": 0.5,
+    "max_age": 0.5,
+    "max_step": 1.0,
+    "real_time": false,
+    "series_root": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/logs/series_01"
+  },
+  "platform": "Linux-7.0.0-34-generic-x86_64-with-glibc2.39",
+  "ros_distro": "jazzy",
+  "position_source": "TF localization, not Gazebo ground truth",
+  "field_shape": [
+    800,
+    1200
+  ],
+  "metadata": {
+    "width": 1200,
+    "height": 800,
+    "res": 0.05,
+    "ox": -10.0,
+    "oy": -10.0
+  },
+  "sampling": "containing cell; no axis rotation or image flip",
+  "exposure_unit": "uSv",
+  "field_time_model": "static, frozen at startup",
+  "boundaries": "manual services; finish success is operator-labelled",
+  "files": {
+    "reference_field.npy": {
+      "source": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy",
+      "sha256": "d6c62801d1fa8d62c2cdfe56eec954ae62d6b822f5d8b5c2adc68f78013d8b5a",
+      "path": "../shared/d6c62801d1fa8d62c2cdfe56eec954ae62d6b822f5d8b5c2adc68f78013d8b5a.npy"
+    },
+    "reference_meta.json": {
+      "source": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex_meta.json",
+      "sha256": "221d7ecbe5ef2ef8c2cfb42f8bcdc67f5106c684682dc28044347d7c02568d5e",
+      "path": "../shared/221d7ecbe5ef2ef8c2cfb42f8bcdc67f5106c684682dc28044347d7c02568d5e.json"
+    },
+    "nav2_input.yaml": {
+      "source": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml",
+      "sha256": "825f0a9961874626a1fa49916b9e81cc9f08f7460eeead8d68ffcda7aa1068db",
+      "path": "../shared/825f0a9961874626a1fa49916b9e81cc9f08f7460eeead8d68ffcda7aa1068db.yaml"
+    },
+    "logger_used.py": {
+      "source": "/home/oleksandr/ros2_ws/install/smart_radiation/lib/python3.12/site-packages/smart_radiation/radiation_run_logger.py",
+      "sha256": "949f4022be461905c977e1fa417fe3c091377d8ec325dc6b75c79dfb7ebbf583",
+      "path": "../shared/949f4022be461905c977e1fa417fe3c091377d8ec325dc6b75c79dfb7ebbf583.py"
+    }
+  },
+  "parameter_snapshots": [
+    {
+      "node": "/planner_server",
+      "status": "captured",
+      "file": "../shared/4ff97ed92e4a137313a4078771ee37d9c75c7e1fd38c8a112d5efc64fd328ab1.yaml",
+      "sha256": "4ff97ed92e4a137313a4078771ee37d9c75c7e1fd38c8a112d5efc64fd328ab1"
+    },
+    {
+      "node": "/controller_server",
+      "status": "captured",
+      "file": "../shared/2b0532483b166ba5084af3c9ad0cd18221b13573e04d5e6bc74716880927dd9c.yaml",
+      "sha256": "2b0532483b166ba5084af3c9ad0cd18221b13573e04d5e6bc74716880927dd9c"
+    },
+    {
+      "node": "/global_costmap/global_costmap",
+      "status": "captured",
+      "file": "../shared/128bc6ec2f76cfee9c02d149c3744a0931595589df5c5a2137c7a58aaf82c5ad.yaml",
+      "sha256": "128bc6ec2f76cfee9c02d149c3744a0931595589df5c5a2137c7a58aaf82c5ad"
+    },
+    {
+      "node": "/local_costmap/local_costmap",
+      "status": "captured",
+      "file": "../shared/10f52725aeb5d967a50a2a3c7cf85b7b3cf5947c7dea1aa5f876c979f9132b5e.yaml",
+      "sha256": "10f52725aeb5d967a50a2a3c7cf85b7b3cf5947c7dea1aa5f876c979f9132b5e"
+    },
+    {
+      "node": "/velocity_smoother",
+      "status": "captured",
+      "file": "../shared/91d4380e0c7e09169380259d6a6463d1c41478416325beb5b88f11b098526e90.yaml",
+      "sha256": "91d4380e0c7e09169380259d6a6463d1c41478416325beb5b88f11b098526e90"
+    },
+    {
+      "node": "/radiation_field_server",
+      "status": "captured",
+      "file": "../shared/b5c1718e93123433f944e6ae6101b2eecac4371ae636a9adca304d1d7bf2d60e.yaml",
+      "sha256": "b5c1718e93123433f944e6ae6101b2eecac4371ae636a9adca304d1d7bf2d60e"
+    }
+  ],
+  "state": "finished",
+  "measured_start": [
+    9.090471335936453e-17,
+    -5.550349243715193e-17,
+    0.0007000370657395116
+  ],
+  "start_ros_s": 318.539,
+  "result": "operator_success"
+}

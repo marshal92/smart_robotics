@@ -19,7 +19,7 @@
       <parent link="base_link"/>
       <!-- Attention. "arm_base_link" is the actual name of the root link of arm from manipulator.urdf.xacro -->
       <child link="arm_base_link"/>
-      <origin xyz="0.1 -0.03 -0.02" rpy="0 0 1.5708"/> 
+      <origin xyz="0.1 -0.03 -0.02" rpy="0 0 0"/> 
     </joint>
   </xacro:if>
 </robot>

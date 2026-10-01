@@ -305,6 +305,11 @@ function initViewer() {
     displayPanAndZoomFrame: false
   })
 
+  // Disable ROS3D's internal highlighter pass safely.
+  if (viewer && viewer.highlighter) {
+    viewer.highlighter.renderHighlights = () => {}
+  }
+
   // Force the canvas into its own GPU compositing layer.
   // ros3d hardcodes alpha:true in WebGLRenderer, causing the browser to
   // blend the canvas with the HTML background → milky haze.
@@ -388,13 +393,12 @@ function initViewer() {
       geometry.computeVertexNormals()
       
       const material = new THREE.MeshPhysicalMaterial({ 
-        color: 0x1976d2,          // Vivid blue
-        emissive: 0x1565c0,       // Blue self-illumination to fight wash
-        emissiveIntensity: 0.25,
-        roughness: 0.25,          // Glossy
-        metalness: 0.6,           // Metallic sheen
-        clearcoat: 0.8,           // Clearcoat gloss layer (toned down)
-        clearcoatRoughness: 0.15,
+        color: 0x1565c0,          // Rich blue
+        emissive: 0x051020,
+        roughness: 0.5,           // Increased roughness for less glare
+        metalness: 0.4,           // Less metallic
+        clearcoat: 0.2,           // Very subtle clearcoat
+        clearcoatRoughness: 0.4,
         reflectivity: 0.7,
         depthWrite: true,
         depthTest: true

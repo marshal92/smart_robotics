@@ -1,0 +1,57 @@
+# Один файл на серию: baseline/proposed, несколько маршрутов и повторов.
+# Пути с ~ разрешены; относительные пути считаются от этого YAML.
+# Изменились поле/параметры/исходники? Укажите НОВЫЙ output_root.
+output_root: ~/ros2_ws/src/smart_robotics/smart_radiation/logs/series_01
+field: ~/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy
+# Если meta не указан, нужен radiation_map_complex_meta.json рядом с полем.
+unit: mSv/h  # Карта сгенерирована в mSv/h! Логгер сам переведет в uSv.
+frame: map
+robot_frame: base_footprint
+plan_topic: /plan
+real_time: false  # false: симуляция /clock; true: аппаратный запуск
+hz: 10.0
+revision: "v1.0"
+notes: "reflex=off; записать состояние GUI/видеозаписи и оборудование"
+attach: []  # Можно сохранить геометрическую карту, её YAML, генератор поля.
+
+# Точные имена исполняемых файлов/скриптов, а не имена ROS-узлов.
+# Общий контейнер Nav2 будет измерен целиком; по плагинам не разделяется.
+monitor_names:
+  - planner_server
+  - controller_server
+  - bt_navigator
+  - velocity_smoother
+  - collision_monitor
+  - component_container
+  - component_container_mt
+  - component_container_isolated
+  - radiation_mapper
+  - virtual_geiger
+
+methods:
+  baseline:
+    nav_config: ~/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml
+    capture_nodes: [/radiation_field_server]
+    monitor_names: [baseline_field_server]
+    notes: "threshold=500; occupancy_cost=87; подтвердить рабочие значения"
+    attach: []  # Например: [/путь/baseline_field_server.py]
+  proposed:
+    nav_config: ~/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml
+    capture_nodes: [/radiation_field_server]
+    monitor_names: [radiation_field_server]
+    notes: "ВПИСАТЬ фактические D_noise, D_crit, k, cap"
+    attach: []  # Например: [/путь/radiation_field_server.py]
+
+# goal=[x,y,yaw в радианах]. Это паспорт, а НЕ отправка команд роботу.
+# planned_start — напоминание; фактический старт автоматически пишется из TF.
+# null намеренно запрещает запуск до ввода настоящих координат.
+routes:
+  R1:
+    planned_start: [0.0, 0.0, 0.0]
+    goal: [6.0, 22.0, 0.0]
+  R2:
+    planned_start: [0.0, 0.0, 0.0]
+    goal: [6.0, 22.0, 0.0]
+  R3:
+    planned_start: [0.0, 0.0, 0.0]
+    goal: [6.0, 22.0, 0.0]

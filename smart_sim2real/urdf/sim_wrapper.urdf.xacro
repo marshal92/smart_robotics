@@ -10,13 +10,11 @@
     <xacro:include filename="$(find ugv_tracked_description)/urdf/sensors/plugins.urdf.xacro" />
     <xacro:include filename="$(find ugv_tracked_description)/urdf/controllers/diff_drive.urdf.xacro" />
 
-    <!-- Gazebo plugin only for simulation assembly -->
     <xacro:if value="$(arg use_arm)">
         <gazebo>
             <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
                 <!-- load controllers from the new common config -->
                 <parameters>$(find smart_moveit_config)/config/ros2_controllers.yaml</parameters>
-                <!-- Redirect topic for the smart mixer (so the arm doesn't shake and wheels are present) -->
                 <ros>
                     <remapping>/joint_states:=/arm_joint_states</remapping>
                 </ros>

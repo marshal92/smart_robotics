@@ -172,6 +172,15 @@ class MissionManager(Node):
             
         self.get_logger().info(f"Radiation subsystems set to: {'ON' if is_active else 'OFF'}")
 
+    def _native_set_shadow(self, is_active):
+        client_shadow = self.create_client(SetParameters, '/shadow_teleop/set_parameters')
+        if client_shadow.wait_for_service(timeout_sec=2.0):
+            req = SetParameters.Request()
+            param = Parameter(name='is_active', value=ParameterValue(type=ParameterType.PARAMETER_BOOL, bool_value=is_active))
+            req.parameters.append(param)
+            client_shadow.call_async(req)
+        self.get_logger().info(f"Shadow Teleop set to: {'ON' if is_active else 'OFF'}")
+
     def _native_radiation_mapper_params(self, map_path, is_recording):
         client_mapper = self.create_client(SetParameters, '/radiation_mapper/set_parameters')
         if client_mapper.wait_for_service(timeout_sec=2.0):
@@ -190,6 +199,15 @@ class MissionManager(Node):
             req.parameters.append(p1)
             client_server.call_async(req)
             self.get_logger().info(f"Radiation Field Server set to: {map_path}")
+            
+    def _native_virtual_geiger_params(self, map_path):
+        client_geiger = self.create_client(SetParameters, '/virtual_geiger/set_parameters')
+        if client_geiger.wait_for_service(timeout_sec=2.0):
+            req = SetParameters.Request()
+            p1 = Parameter(name='map_path', value=ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=map_path))
+            req.parameters.append(p1)
+            client_geiger.call_async(req)
+            self.get_logger().info(f"Virtual Geiger set to: {map_path}")
             
     def _native_radiation_mapper_trigger(self, service_name):
         client = self.create_client(Trigger, service_name)
@@ -245,6 +263,8 @@ class MissionManager(Node):
                                            self._native_clear_costmap('/global_costmap/clear_entirely_global_costmap')],
             'rad_on':             lambda: self._native_set_radiation(True),
             'rad_off':            lambda: self._native_set_radiation(False),
+            'shadow_on':          lambda: self._native_set_shadow(True),
+            'shadow_off':         lambda: self._native_set_shadow(False),
             'toggle_slam':        lambda: self._native_toggle_slam()
         }
 
@@ -272,6 +292,8 @@ class MissionManager(Node):
             if not map_name.endswith('.npy'): map_name += '.npy'
             self._native_radiation_mapper_params(map_name, is_recording=False)
             self._native_radiation_server_params(map_name)
+            self._native_virtual_geiger_params(map_name)
+            self._native_set_radiation(True) # Auto-enable radiation when map is explicitly loaded
         elif action == 'rad_record':
             map_name = cmd_parts[1] if len(cmd_parts) > 1 else "explored_map"
             if not map_name.endswith('.npy'): map_name += '.npy'

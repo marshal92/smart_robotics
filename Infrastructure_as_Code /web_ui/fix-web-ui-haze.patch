@@ -1,0 +1,25 @@
+diff --git a/Infrastructure_as_Code /web_ui/src/components/layout/DigitalTwin3D.vue b/Infrastructure_as_Code /web_ui/src/components/layout/DigitalTwin3D.vue
+index 21dc127..4ae151c 100644
+--- a/Infrastructure_as_Code /web_ui/src/components/layout/DigitalTwin3D.vue	
++++ b/Infrastructure_as_Code /web_ui/src/components/layout/DigitalTwin3D.vue	
+@@ -305,15 +305,11 @@ function initViewer() {
+     displayPanAndZoomFrame: false
+   })
+ 
+-  // Force the canvas into its own GPU compositing layer.
+-  // ros3d hardcodes alpha:true in WebGLRenderer, causing the browser to
+-  // blend the canvas with the HTML background → milky haze.
+-  // Forcing a compositing layer isolates the canvas from page compositing,
+-  // which is the same reason a transparent overlay "fixed" the image.
+-  const canvas = viewer.renderer.domElement
+-  canvas.style.willChange = 'transform'
+-  canvas.style.transform = 'translateZ(0)'
+-  canvas.style.backfaceVisibility = 'hidden'
++  // ros3d 1.1.0 bundles its own THREE constructors. Its Highlighter uses
++  // instanceof checks, so meshes created by our separate `three` import
++  // are not hidden and get repainted white at 50% opacity every frame.
++  // This view uses its own raycaster and no ROS3D hover highlighting.
++  viewer.highlighter.renderHighlights = () => {}
+   
+   window.addEventListener('theme-changed', (e) => {
+     if (viewer && viewer.renderer) {

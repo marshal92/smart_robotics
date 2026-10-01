@@ -1,0 +1,1039 @@
+<template>
+  <div ref="wrapper" class="dt-wrapper">
+    <!-- absolute inset-0 prevents the canvas from stretching the parent -->
+    <div id="viewer3d" class="dt-viewer"></div>
+    
+    <!-- Fullscreen Button -->
+    <button class="fullscreen-btn" @click="toggleFullscreen" title="Fullscreen">⛶</button>
+    
+    <!-- Bottom Control Panel -->
+    <div class="dt-bottom-panel">
+      
+      <!-- Left: Coordinates -->
+      <div class="dt-coords">
+        <div v-if="hoverCoords" class="coord-line">
+          <span class="coord-lbl">Cur:</span> X: {{ hoverCoords.x.toFixed(2) }} <span>|</span> Y: {{ hoverCoords.y.toFixed(2) }}
+        </div>
+        <div v-else class="dt-coords-empty">
+          Hover map...
+        </div>
+        <div v-if="robotCoords" class="coord-line" style="color: var(--accent); margin-top: 2px;">
+          <span class="coord-lbl">Rob:</span> X: {{ robotCoords.x.toFixed(2) }} <span>|</span> Y: {{ robotCoords.y.toFixed(2) }}
+        </div>
+      </div>
+
+      <!-- Center/Right: Action Buttons -->
+      <div class="dt-actions">
+        <!-- 3D World Toggle with Context Menu for Worlds -->
+        <div style="position: relative; display: inline-block;">
+          <button 
+            @click="toggle3DWorld"
+            @contextmenu.prevent="showWorldMenu = !showWorldMenu"
+            :class="['dt-btn', show3DWorld ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+          >
+            <span>3D View</span>
+          </button>
+          
+          <div v-if="showWorldMenu" class="world-menu">
+            <div class="world-menu-item" @click="loadWorld('213')">213.sdf</div>
+            <div class="world-menu-item" @click="loadWorld('kitchen')">kitchen.sdf</div>
+            <div class="world-menu-item" @click="loadWorld('shelter_zero')">shelter_zero.sdf</div>
+            <div class="world-menu-item" @click="loadWorld('shelter_zero_empty')">shelter_zero_empty.sdf</div>
+            <div class="world-menu-slider" style="padding: 10px; border-top: 1px solid #444;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; color: #ccc;">
+                <span>Opacity</span>
+                <span>{{ Math.round(sdfOpacity * 100) }}%</span>
+              </div>
+              <input type="range" min="0.1" max="1.0" step="0.1" v-model.number="sdfOpacity" @change="updateSDFOpacity" style="width: 100%;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Radiation Toggle -->
+        <button 
+          @click="toggleRadiation"
+          :class="['dt-btn', showRadiation ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+        >
+          <span>Radiation</span>
+        </button>
+
+        <!-- Waypoints Toggle -->
+        <button 
+          @click="toggleWaypoints"
+          :class="['dt-btn', showWaypoints ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+        >
+          <span>Waypoints</span>
+        </button>
+
+        <!-- Shadow Toggle -->
+        <button 
+          @click="toggleShadow"
+          :class="['dt-btn', showShadowRobot ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+        >
+          <span>Shadow</span>
+        </button>
+
+        <!-- Nav Goal Toggle -->
+        <button 
+          @click="toggleNavMode"
+          :class="['dt-btn', isNavMode ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+        >
+          <span>{{ isNavMode ? 'Click & Drag...' : 'Nav Goal' }}</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Nav Mode Hint overlay -->
+    <div v-if="isNavMode" class="dt-nav-hint">
+      Click to set position, drag for orientation
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { onMounted, watch, ref, onBeforeUnmount } from 'vue'
+import { useRosStore } from '../../stores/rosStore'
+import { getRosInstance } from '../../services/rosConnection'
+import * as ROSLIB from 'roslib'
+import * as THREE from 'three'
+import { STLLoader } from 'three/addons/loaders/STLLoader.js'
+import { createViewer } from '../../three/createViewer'
+import { SimpleTFClient } from '../../services/simpleTfClient'
+import { createURDFRobot } from '../../three/robotModel'
+
+const store = useRosStore()
+const viewerInitialized = ref(false)
+const hoverCoords = ref(null)
+const isNavMode = ref(false)
+const showWaypoints = ref(false)
+const showRadiation = ref(false)
+const show3DWorld = ref(false)
+const showShadowRobot = ref(false)
+const showWorldMenu = ref(false)
+const sdfOpacity = ref(0.7)
+const wrapper = ref(null)
+const robotCoords = ref(null)
+
+const toggleFullscreen = () => {
+  if (!document.fullscreenElement) {
+    if (wrapper.value.requestFullscreen) {
+      wrapper.value.requestFullscreen()
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen()
+    }
+  }
+}
+
+let viewer = null
+let tfClient = null
+let navGoalArrow = null 
+const waypointMeshes = {}
+let radiationPlane = null
+let sdfWorldGroup = null
+let robotGroup = new THREE.Group()
+let shadowGroup = new THREE.Group()
+let urdfModel = null
+
+// Load SDF World logic
+const loadSDFWorld = (worldName) => {
+  if (!viewer) return
+    const worldUrl = 'http://' + window.location.hostname + ':8080/install/smart_sim2real/share/smart_sim2real/worlds/' + worldName + '.sdf'
+    
+    // Remove old world
+    if (sdfWorldGroup) {
+      viewer.scene.remove(sdfWorldGroup)
+    }
+
+    sdfWorldGroup = new THREE.Group()
+    sdfWorldGroup.visible = show3DWorld.value
+    viewer.scene.add(sdfWorldGroup)
+
+    fetch(worldUrl)
+      .then(response => response.text())
+      .then(xmlString => {
+        const parser = new DOMParser()
+        const xmlDoc = parser.parseFromString(xmlString, 'text/xml')
+        
+        const models = xmlDoc.querySelectorAll('model')
+        models.forEach(model => {
+          const modelGroup = new THREE.Group()
+          
+          // Parse model pose
+          const poseTags = model.querySelectorAll('pose')
+          const mPoseTag = Array.from(poseTags).find(t => t.parentElement === model)
+          if (mPoseTag) {
+            const p = mPoseTag.textContent.trim().split(/\s+/).map(Number)
+            modelGroup.position.set(p[0], p[1], p[2])
+            modelGroup.rotation.set(p[3], p[4], p[5], 'ZYX')
+          }
+          sdfWorldGroup.add(modelGroup)
+          
+          // Parse links
+          const links = model.querySelectorAll('link')
+          links.forEach(link => {
+            const linkGroup = new THREE.Group()
+            
+            const lPoseTag = Array.from(link.querySelectorAll('pose')).find(t => t.parentElement === link)
+            if (lPoseTag) {
+              const p = lPoseTag.textContent.trim().split(/\s+/).map(Number)
+              linkGroup.position.set(p[0], p[1], p[2])
+              linkGroup.rotation.set(p[3], p[4], p[5], 'ZYX')
+            }
+            modelGroup.add(linkGroup)
+            
+            // Parse visuals
+            const visuals = link.querySelectorAll('visual')
+            visuals.forEach(visual => {
+              const meshTag = visual.querySelector('geometry mesh')
+              if (!meshTag) return
+              
+              let uri = meshTag.querySelector('uri').textContent
+              if (uri.includes('smart_sim2real')) {
+                const parts = uri.split('smart_sim2real')
+                const relativePath = parts[parts.length - 1]
+                uri = 'http://' + window.location.hostname + ':8080/install/smart_sim2real/share/smart_sim2real' + relativePath
+              }
+              
+              const loader = new STLLoader()
+              loader.load(uri, (geometry) => {
+                geometry.computeVertexNormals()
+                
+                let color = 0x888888
+                const diffuseTag = visual.querySelector('material diffuse')
+                const ambientTag = visual.querySelector('material ambient')
+                const colorTag = diffuseTag || ambientTag
+                if (colorTag) {
+                  const rgba = colorTag.textContent.trim().split(/\s+/).map(Number)
+                  color = new THREE.Color(rgba[0] * 0.6, rgba[1] * 0.6, rgba[2] * 0.6).getHex()
+                }
+                
+                const material = new THREE.MeshStandardMaterial({
+                  color: color,
+                  roughness: 0.9,
+                  metalness: 0.1,
+                  transparent: true,
+                  opacity: sdfOpacity.value,
+                  depthWrite: sdfOpacity.value > 0.99,
+                  depthTest: true
+                })
+                
+                const mesh = new THREE.Mesh(geometry, material)
+                mesh.castShadow = true
+                mesh.receiveShadow = true
+                
+                const vPoseTag = Array.from(visual.querySelectorAll('pose')).find(t => t.parentElement === visual)
+                if (vPoseTag) {
+                  const p = vPoseTag.textContent.trim().split(/\s+/).map(Number)
+                  mesh.position.set(p[0], p[1], p[2])
+                  mesh.rotation.set(p[3], p[4], p[5], 'ZYX')
+                }
+                
+                const scaleTag = meshTag.querySelector('scale')
+                if (scaleTag) {
+                  const s = scaleTag.textContent.trim().split(/\s+/).map(Number)
+                  mesh.scale.set(s[0], s[1], s[2])
+                }
+                
+                linkGroup.add(mesh)
+              })
+            })
+          })
+        })
+      })
+      .catch(err => console.error('Failed to load SDF world:', err))
+}
+
+function loadWorld(name) {
+  showWorldMenu.value = false
+  loadSDFWorld(name)
+}
+
+function toggleRadiation() {
+  showRadiation.value = !showRadiation.value
+  if (radiationPlane) {
+    radiationPlane.visible = showRadiation.value
+  }
+}
+
+function toggleNavMode() {
+  isNavMode.value = !isNavMode.value
+}
+
+function toggleWaypoints() {
+  showWaypoints.value = !showWaypoints.value
+  for (let key in waypointMeshes) {
+    waypointMeshes[key].visible = showWaypoints.value
+  }
+}
+
+function updateSDFOpacity() {
+  if (sdfWorldGroup) {
+    sdfWorldGroup.traverse((child) => {
+      if (child.isMesh && child.material) {
+        child.material.transparent = true
+        child.material.opacity = sdfOpacity.value
+        child.material.depthWrite = sdfOpacity.value > 0.99
+      }
+    })
+  }
+}
+
+function toggleShadow() {
+  showShadowRobot.value = !showShadowRobot.value
+  if (viewer && viewer.shadowGroup) {
+    viewer.shadowGroup.visible = showShadowRobot.value
+  }
+}
+
+function toggle3DWorld() {
+  show3DWorld.value = !show3DWorld.value
+  if (sdfWorldGroup) {
+    sdfWorldGroup.visible = show3DWorld.value
+  }
+}
+
+onMounted(() => {
+  createScene()
+  if (store.isConnected) {
+    connectSceneData()
+  }
+})
+
+watch(() => store.isConnected, (newVal) => {
+  if (newVal && !viewerInitialized.value) {
+    connectSceneData()
+  }
+})
+
+function createScene() {
+  const container = document.getElementById('viewer3d')
+  if (!container || !wrapper.value) return
+  
+  const rect = wrapper.value.getBoundingClientRect()
+  const initWidth = rect.width || 800
+  const initHeight = rect.height || 500
+
+  const isLight = document.documentElement.classList.contains('light-theme')
+  viewer = createViewer(container, {
+    background: isLight ? 0x555555 : 0x111111
+  })
+
+  window.addEventListener('theme-changed', (e) => {
+    if (viewer) {
+      viewer.setBackground(e.detail ? 0x555555 : 0x111111)
+    }
+  })
+  
+  // Enable shadows
+  viewer.renderer.shadowMap.enabled = true
+  viewer.renderer.shadowMap.type = THREE.PCFSoftShadowMap
+
+  viewer.scene.add(robotGroup)
+  viewer.scene.add(shadowGroup)
+  viewer.shadowGroup = shadowGroup // Store in viewer to access in loader
+  
+  const loader = new STLLoader()
+  const meshUrl = 'http://' + window.location.hostname + ':8080/install/ugv_tracked_description/share/ugv_tracked_description/meshes/base.STL'
+  
+  loader.load(meshUrl, (geometry) => {
+    // Fix missing normals from raw STL
+    geometry.computeVertexNormals()
+    
+    const material = new THREE.MeshPhysicalMaterial({ 
+      color: 0x1565c0,          // Rich blue
+      emissive: 0x051020,
+      roughness: 0.5,           // Increased roughness for less glare
+      metalness: 0.4,           // Less metallic
+      clearcoat: 0.2,           // Very subtle clearcoat
+      clearcoatRoughness: 0.4,
+      reflectivity: 0.7,
+      depthWrite: true,
+      depthTest: true
+    })
+    const robotMesh = new THREE.Mesh(geometry, material)
+    
+    robotMesh.castShadow = true
+    robotMesh.receiveShadow = true
+    
+    robotMesh.scale.set(0.001, 0.001, 0.001)
+    robotMesh.rotation.set(0, 0, 0)
+    
+    robotGroup.add(robotMesh)
+
+    // === SHADOW ROBOT MESH ===
+    const shadowMaterial = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      roughness: 0.8,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false
+    })
+    const shadowMesh = new THREE.Mesh(geometry, shadowMaterial)
+    shadowMesh.scale.set(0.001, 0.001, 0.001)
+    shadowMesh.rotation.set(0, 0, 0)
+    // Save reference to shadowMesh to update color later
+    viewer.shadowRobotMesh = shadowMesh
+    viewer.shadowGroup.add(shadowMesh)
+
+  }, undefined, (error) => {
+    console.error("Error loading STL:", error)
+  })
+}
+
+function connectSceneData() {
+  const container = document.getElementById('viewer3d')
+  if (!container) return
+
+  const ros = getRosInstance()
+  if (!ros) return
+
+  // 2. Setup SimpleTFClient
+  tfClient = new SimpleTFClient({
+    ros: ros,
+    fixedFrame: 'map'
+  })
+
+  // 4. Setup TF update for Robot and Shadow
+  const updateRobotPose = (tf) => {
+    robotGroup.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
+    robotGroup.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
+    robotCoords.value = { x: tf.translation.x, y: tf.translation.y }
+  }
+  
+  tfClient.subscribe('base_link', updateRobotPose)
+
+  const updateShadowPose = (tf) => {
+    shadowGroup.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
+    shadowGroup.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
+  }
+  tfClient.subscribe('shadow_base_link', updateShadowPose)
+  
+  // 4.1 Load URDF Robot
+  if (urdfModel) urdfModel.dispose()
+  urdfModel = createURDFRobot(ros, viewer, tfClient)
+
+  // 5. Custom Fast Image Map Renderer
+  let mapPlane = null
+  let mapResolution = 0.05
+  let mapOrigin = { x: 0, y: 0, z: 0 }
+  let mapOrientation = { x: 0, y: 0, z: 0, w: 1 }
+
+  const metaSub = new ROSLIB.Topic({
+    ros: ros,
+    name: '/map_metadata',
+    messageType: 'nav_msgs/msg/MapMetaData'
+  })
+  
+  metaSub.subscribe((msg) => {
+    mapResolution = msg.resolution
+    mapOrigin = msg.origin.position
+    mapOrientation = msg.origin.orientation
+  })
+  
+  const mapSub = new ROSLIB.Topic({
+    ros: ros,
+    name: '/map_image/compressed',
+    messageType: 'sensor_msgs/msg/CompressedImage',
+    throttle_rate: 200 // 5Hz
+  })
+  
+  mapSub.subscribe((msg) => {
+    const img = new Image()
+    img.src = 'data:image/png;base64,' + msg.data
+    img.onload = () => {
+      const texture = new THREE.Texture(img)
+      texture.needsUpdate = true
+      texture.magFilter = THREE.NearestFilter
+      texture.minFilter = THREE.NearestFilter
+      
+      const width = img.width * mapResolution
+      const height = img.height * mapResolution
+      const geometry = new THREE.PlaneGeometry(width, height)
+      geometry.translate(width / 2, height / 2, 0)
+
+      if (!mapPlane) {
+        const material = new THREE.MeshLambertMaterial({ 
+          color: 0x999999, // Darkens the map by reflecting less light
+          map: texture,
+          transparent: false,
+          depthWrite: true, // Normal depth
+          side: THREE.FrontSide
+        })
+        mapPlane = new THREE.Mesh(geometry, material)
+        
+        // Push map 5mm down to stop Z-fighting without making the robot float
+        mapPlane.position.set(mapOrigin.x, mapOrigin.y, mapOrigin.z - 0.005)
+        mapPlane.quaternion.set(mapOrientation.x, mapOrientation.y, mapOrientation.z, mapOrientation.w)
+        
+        // Receive shadows if we enable them later
+        mapPlane.receiveShadow = true
+        
+        viewer.scene.add(mapPlane)
+      } else {
+        mapPlane.material.map.dispose()
+        mapPlane.material.map = texture
+        
+        mapPlane.geometry.dispose()
+        mapPlane.geometry = geometry
+        mapPlane.position.set(mapOrigin.x, mapOrigin.y, mapOrigin.z - 0.005)
+        mapPlane.quaternion.set(mapOrientation.x, mapOrientation.y, mapOrientation.z, mapOrientation.w)
+      }
+    }
+  })
+
+  // Radiation Overlay Plane
+  const radSub = new ROSLIB.Topic({
+    ros: ros,
+    name: '/radiation_image/compressed',
+    messageType: 'sensor_msgs/msg/CompressedImage',
+    throttle_rate: 200
+  })
+  
+  radSub.subscribe((msg) => {
+    const img = new Image()
+    img.src = 'data:image/png;base64,' + msg.data
+    img.onload = () => {
+      const texture = new THREE.Texture(img)
+      texture.needsUpdate = true
+      texture.magFilter = THREE.NearestFilter
+      texture.minFilter = THREE.NearestFilter
+      
+      const width = img.width * mapResolution
+      const height = img.height * mapResolution
+      const geometry = new THREE.PlaneGeometry(width, height)
+      geometry.translate(width / 2, height / 2, 0)
+
+      if (!radiationPlane) {
+        const material = new THREE.MeshBasicMaterial({ 
+          map: texture,
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false, // Don't write to depth buffer to avoid Z-fighting
+          side: THREE.FrontSide
+        })
+        radiationPlane = new THREE.Mesh(geometry, material)
+        
+        // Push radiation layer slightly above the map
+        radiationPlane.position.set(mapOrigin.x, mapOrigin.y, mapOrigin.z + 0.005)
+        radiationPlane.quaternion.set(mapOrientation.x, mapOrientation.y, mapOrientation.z, mapOrientation.w)
+        radiationPlane.visible = showRadiation.value
+        
+        viewer.scene.add(radiationPlane)
+      } else {
+        radiationPlane.material.map.dispose()
+        radiationPlane.material.map = texture
+        
+        radiationPlane.geometry.dispose()
+        radiationPlane.geometry = geometry
+        radiationPlane.position.set(mapOrigin.x, mapOrigin.y, mapOrigin.z + 0.005)
+        radiationPlane.quaternion.set(mapOrientation.x, mapOrientation.y, mapOrientation.z, mapOrientation.w)
+      }
+    }
+  })
+
+  // 6. Load SDF World initially
+  loadSDFWorld('213')
+
+  // 7. Interactive Map (Hover Coordinates & 2D Nav Goal Click-and-Drag)
+  const raycaster = new THREE.Raycaster()
+  const mouse = new THREE.Vector2()
+  let dragStartPoint = null
+  
+  navGoalArrow = new THREE.Group()
+  const arrowMat = new THREE.MeshBasicMaterial({ color: 0x10b981, side: THREE.DoubleSide, depthTest: false })
+  
+  // Single flat arrow shape
+  const arrowShape = new THREE.Shape()
+  arrowShape.moveTo(0, -0.05) // Start bottom
+  arrowShape.lineTo(1, -0.05) // Shaft bottom
+  arrowShape.lineTo(1, -0.2) // Arrow head bottom
+  arrowShape.lineTo(1.3, 0) // Arrow tip
+  arrowShape.lineTo(1, 0.2) // Arrow head top
+  arrowShape.lineTo(1, 0.05) // Shaft top
+  arrowShape.lineTo(0, 0.05) // Start top
+  arrowShape.lineTo(0, -0.05) // Close
+
+  const arrowGeo = new THREE.ShapeGeometry(arrowShape)
+  const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat)
+  navGoalArrow.add(arrowMesh)
+  navGoalArrow.renderOrder = 999 // Draw on top
+  navGoalArrow.visible = false
+  viewer.scene.add(navGoalArrow)
+
+  const goalPub = new ROSLIB.Topic({
+    ros: ros,
+    name: '/goal_pose',
+    messageType: 'geometry_msgs/msg/PoseStamped'
+  })
+
+  function getMapIntersection(event) {
+    if (!mapPlane) return null
+    const rect = container.getBoundingClientRect()
+    let clientX = event.clientX
+    let clientY = event.clientY
+    
+    if (event.touches && event.touches.length > 0) {
+      clientX = event.touches[0].clientX
+      clientY = event.touches[0].clientY
+    } else if (event.changedTouches && event.changedTouches.length > 0) {
+      clientX = event.changedTouches[0].clientX
+      clientY = event.changedTouches[0].clientY
+    }
+
+    if (clientX === undefined || clientY === undefined) return null
+
+    mouse.x = ((clientX - rect.left) / container.clientWidth) * 2 - 1
+    mouse.y = -((clientY - rect.top) / container.clientHeight) * 2 + 1
+    
+    raycaster.setFromCamera(mouse, viewer.camera)
+    const intersects = raycaster.intersectObject(mapPlane)
+    return intersects.length > 0 ? intersects[0].point : null
+  }
+
+  container.addEventListener('mousemove', (event) => {
+    const point = getMapIntersection(event)
+    if (point) {
+      hoverCoords.value = { x: point.x, y: point.y }
+    } else {
+      hoverCoords.value = null
+    }
+
+    if (isNavMode.value && dragStartPoint) {
+      event.stopPropagation() // Prevent OrbitControls rotation while dragging arrow
+      event.preventDefault()
+      
+      const point = getMapIntersection(event)
+      const dx = (point ? point.x : hoverCoords.value?.x || dragStartPoint.x) - dragStartPoint.x
+      const dy = (point ? point.y : hoverCoords.value?.y || dragStartPoint.y) - dragStartPoint.y
+      const length = Math.sqrt(dx*dx + dy*dy)
+      if (length > 0.1) {
+        const angle = Math.atan2(dy, dx)
+        navGoalArrow.rotation.set(0, 0, angle)
+        
+        const totalLength = Math.max(length, 0.5)
+        // Since arrow geometry is length 1 (shaft) + 0.3 (head), we scale X by totalLength / 1.3
+        arrowMesh.scale.set(totalLength / 1.3, 1, 1)
+        
+        navGoalArrow.visible = true
+      }
+    }
+  }, { passive: false })
+
+  const handleDragStart = (event) => {
+    if ((event.button !== undefined && event.button !== 0) || !isNavMode.value) return 
+    
+    const point = getMapIntersection(event)
+    if (point) {
+      event.stopPropagation() // Prevent OrbitControls rotation
+      dragStartPoint = point
+      navGoalArrow.position.copy(dragStartPoint)
+      navGoalArrow.position.z += 0.05 
+      
+      arrowMesh.scale.set(0.1, 1, 1)
+      
+      navGoalArrow.visible = true
+      if (viewer && viewer.controls) viewer.controls.enabled = false
+    }
+  }
+
+  container.addEventListener('mousedown', handleDragStart, true)
+  container.addEventListener('touchstart', (e) => {
+    if (isNavMode.value) e.preventDefault()
+    handleDragStart(e)
+  }, { passive: false })
+
+  const handleDragEnd = (event) => {
+    if (isNavMode.value && dragStartPoint) {
+      event.stopPropagation() // Prevent OrbitControls issues on release
+      
+      let dragEndPoint = getMapIntersection(event)
+      if (!dragEndPoint) {
+        // If mouse released outside map, try to estimate from mouse pos or just use start point
+        dragEndPoint = dragStartPoint
+      }
+
+      let yaw = 0
+      const dx = dragEndPoint.x - dragStartPoint.x
+      const dy = dragEndPoint.y - dragStartPoint.y
+      
+      if (Math.sqrt(dx*dx + dy*dy) > 0.1) {
+        yaw = Math.atan2(dy, dx)
+      } else {
+        const robotRot = new THREE.Euler().setFromQuaternion(robotGroup.quaternion)
+        yaw = robotRot.z
+      }
+      
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, yaw))
+      
+      const pose = {
+        header: {
+          stamp: { sec: 0, nanosec: 0 },
+          frame_id: 'map'
+        },
+        pose: {
+          position: { x: dragStartPoint.x, y: dragStartPoint.y, z: 0.0 },
+          orientation: { x: q.x, y: q.y, z: q.z, w: q.w }
+        }
+      }
+      goalPub.publish(pose)
+      console.log(`Sent Nav Goal: X=${dragStartPoint.x.toFixed(2)}, Y=${dragStartPoint.y.toFixed(2)}, Yaw=${(yaw*180/Math.PI).toFixed(1)}°`)
+      
+      dragStartPoint = null
+      navGoalArrow.visible = false
+      if (viewer && viewer.controls) viewer.controls.enabled = true
+      toggleNavMode() 
+    }
+  }
+
+  window.addEventListener('mouseup', handleDragEnd, true)
+  window.addEventListener('touchend', (e) => {
+    if (isNavMode.value) e.preventDefault()
+    handleDragEnd(e)
+  }, { passive: false })
+
+  // 7. Parse Smart Waypoints Markers
+  const waypointSub = new ROSLIB.Topic({
+    ros: ros,
+    name: '/smart_waypoints_markers',
+    messageType: 'visualization_msgs/msg/MarkerArray'
+  })
+
+  waypointSub.subscribe((msg) => {
+    msg.markers.forEach(m => {
+      const key = m.ns + m.id
+      if (waypointMeshes[key]) {
+        viewer.scene.remove(waypointMeshes[key])
+        delete waypointMeshes[key]
+      }
+      
+      if (m.action === 2) return // DELETE
+      
+      let mMesh = null
+      
+      if (m.type === 3) { // Cylinder
+        const sx = (m.scale.x || 1) / 4
+        const sy = (m.scale.y || 1) / 4
+        const sz = (m.scale.z || 1) / 4
+        const geometry = new THREE.CylinderGeometry(sx/2, sy/2, sz, 32)
+        geometry.rotateX(Math.PI / 2)
+        
+        const isTransparent = m.color.a < 1.0
+        const material = new THREE.MeshStandardMaterial({ 
+          color: new THREE.Color(m.color.r, m.color.g, m.color.b),
+          transparent: isTransparent,
+          opacity: m.color.a || 1.0,
+          depthWrite: !isTransparent 
+        })
+        mMesh = new THREE.Mesh(geometry, material)
+        
+      } else if (m.type === 9) { // Text View-Facing (Sprite)
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        canvas.width = 256
+        canvas.height = 64
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        
+        ctx.font = 'bold 24px Arial'
+        ctx.fillStyle = `rgba(${Math.round(m.color.r*255)}, ${Math.round(m.color.g*255)}, ${Math.round(m.color.b*255)}, ${m.color.a})`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        
+        ctx.shadowColor = 'transparent'
+        ctx.shadowBlur = 0
+        
+        ctx.lineWidth = 2
+        ctx.strokeStyle = 'black'
+        ctx.strokeText(m.text, canvas.width/2, canvas.height/2)
+        ctx.fillText(m.text, canvas.width/2, canvas.height/2)
+        
+        const texture = new THREE.CanvasTexture(canvas)
+        // Use alphaTest to completely discard the empty canvas background, preventing black rectangles
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, alphaTest: 0.5 })
+        mMesh = new THREE.Sprite(material)
+        
+        const scaleBase = (m.scale.z > 0 ? m.scale.z * 10 : 2) / 4
+        mMesh.scale.set(scaleBase * 4, scaleBase, 1) 
+      }
+
+      if (mMesh) {
+        mMesh.position.set(m.pose.position.x, m.pose.position.y, m.pose.position.z)
+        if (m.type !== 9) {
+          mMesh.quaternion.set(m.pose.orientation.x, m.pose.orientation.y, m.pose.orientation.z, m.pose.orientation.w)
+        }
+        
+        mMesh.visible = showWaypoints.value 
+        
+        viewer.scene.add(mMesh)
+        waypointMeshes[key] = mMesh
+      }
+    })
+  })
+
+  // 8. Custom Navigation Path Visualization (Fixes ROS3D deprecated Geometry)
+  let pathLine = null
+
+  const pathSub = new ROSLIB.Topic({
+    ros: ros,
+    name: '/plan',
+    messageType: 'nav_msgs/msg/Path'
+  })
+
+  pathSub.subscribe((message) => {
+    if (pathLine) {
+      viewer.scene.remove(pathLine)
+      pathLine.geometry.dispose()
+      pathLine.material.dispose()
+      pathLine = null
+    }
+
+    if (!message.poses || message.poses.length === 0) return
+
+    const points = []
+    message.poses.forEach(p => {
+      // Lift the path slightly (Z + 0.02) so it doesn't Z-fight with the floor
+      points.push(new THREE.Vector3(p.pose.position.x, p.pose.position.y, p.pose.position.z + 0.02))
+    })
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points)
+    const material = new THREE.LineBasicMaterial({ 
+      color: 0xffa500, // Bright orange
+      linewidth: 3
+    })
+
+    pathLine = new THREE.Line(geometry, material)
+    viewer.scene.add(pathLine)
+  })
+
+  // 9. Shadow Robot Marker Status (Color / Visibility)
+  const shadowMarkerSub = new ROSLIB.Topic({
+    ros: ros,
+    name: '/shadow_marker',
+    messageType: 'visualization_msgs/msg/Marker'
+  })
+
+  shadowMarkerSub.subscribe((msg) => {
+    if (viewer.shadowRobotMesh) {
+      const mat = viewer.shadowRobotMesh.material
+      mat.color.setRGB(msg.color.r, msg.color.g, msg.color.b)
+      mat.opacity = msg.color.a
+      viewer.shadowRobotMesh.visible = (msg.color.a > 0.0 && msg.pose.position.z > -1.0)
+    }
+  })
+
+  // 10. Shadow Path Visualization
+  let shadowPathLine = null
+  const shadowPathSub = new ROSLIB.Topic({
+    ros: ros,
+    name: '/shadow_path',
+    messageType: 'nav_msgs/msg/Path'
+  })
+
+  shadowPathSub.subscribe((message) => {
+    if (shadowPathLine) {
+      viewer.scene.remove(shadowPathLine)
+      shadowPathLine.geometry.dispose()
+      shadowPathLine.material.dispose()
+      shadowPathLine = null
+    }
+    if (!message.poses || message.poses.length === 0) return
+
+    const points = []
+    message.poses.forEach(p => {
+      points.push(new THREE.Vector3(p.pose.position.x, p.pose.position.y, p.pose.position.z + 0.03))
+    })
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points)
+    const material = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 3 })
+    shadowPathLine = new THREE.Line(geometry, material)
+    viewer.scene.add(shadowPathLine)
+  })
+  viewerInitialized.value = true
+}
+
+onBeforeUnmount(() => {
+  if (urdfModel) {
+    urdfModel.dispose()
+    urdfModel = null
+  }
+  if (viewer) {
+    viewer.dispose()
+    viewer = null
+  }
+})
+</script>
+
+<style scoped>
+.dt-wrapper {
+  position: relative;
+  width: 100%;
+  flex-grow: 1;
+  min-height: 500px; /* Base height */
+  background-color: #111;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #333;
+}
+
+.fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: 0.2s;
+  z-index: 100;
+}
+.fullscreen-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.dt-viewer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #111111;
+  isolation: isolate;
+}
+.dt-viewer canvas {
+  display: block;
+  background-color: #111111 !important;
+  opacity: 1 !important;
+  mix-blend-mode: normal !important;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.dt-bottom-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--dt-panel-bg);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid var(--console-border, #333);
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 10;
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.dt-coords {
+  font-family: monospace;
+  color: #10b981;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 150px;
+}
+.dt-coords span {
+  color: #666;
+  margin: 0 5px;
+}
+.dt-coords-empty {
+  color: #777;
+}
+
+.dt-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.dt-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.dt-btn-inactive {
+  background: var(--btn-bg);
+  color: var(--text);
+  border-color: var(--input-border);
+}
+.dt-btn-inactive:hover {
+  background: var(--input-bg);
+}
+
+.dt-btn-active-blue { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 0 8px rgba(25, 118, 210, 0.5); }
+
+.coord-line { font-size: 11px; }
+.coord-lbl { opacity: 0.7; font-size: 10px; }
+
+.dt-nav-hint {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 77, 64, 0.9);
+  color: #80cbc4;
+  padding: 8px 20px;
+  border-radius: 30px;
+  border: 1px solid #00897b;
+  font-weight: bold;
+  font-size: 14px;
+  z-index: 10;
+  pointer-events: none;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 137, 123, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(0, 137, 123, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 137, 123, 0); }
+}
+.world-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: #222;
+  border: 1px solid #444;
+  border-radius: 6px;
+  box-shadow: 0 -4px 8px rgba(0,0,0,0.5);
+  margin-bottom: 5px;
+  z-index: 100;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.world-menu-item {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #ddd;
+  cursor: pointer;
+  border-bottom: 1px solid #333;
+}
+
+.world-menu-item:last-child {
+  border-bottom: none;
+}
+
+.world-menu-item:hover {
+  background: var(--accent);
+  color: white;
+}
+</style>

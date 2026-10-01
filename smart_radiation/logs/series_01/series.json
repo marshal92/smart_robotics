@@ -1,0 +1,95 @@
+{
+  "settings": {
+    "output_root": "~/ros2_ws/src/smart_robotics/smart_radiation/logs/series_01",
+    "field": "~/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy",
+    "unit": "uSv/h",
+    "frame": "map",
+    "robot_frame": "base_footprint",
+    "plan_topic": "/plan",
+    "real_time": false,
+    "hz": 10.0,
+    "revision": "v1.0",
+    "notes": "reflex=off; записать состояние GUI/видеозаписи и оборудование",
+    "attach": [],
+    "monitor_names": [
+      "planner_server",
+      "controller_server",
+      "bt_navigator",
+      "velocity_smoother",
+      "collision_monitor",
+      "component_container",
+      "component_container_mt",
+      "component_container_isolated",
+      "radiation_mapper",
+      "virtual_geiger"
+    ],
+    "methods": {
+      "baseline": {
+        "nav_config": "~/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml",
+        "capture_nodes": [
+          "/radiation_field_server"
+        ],
+        "monitor_names": [
+          "baseline_field_server"
+        ],
+        "notes": "threshold=500; occupancy_cost=87; подтвердить рабочие значения",
+        "attach": []
+      },
+      "proposed": {
+        "nav_config": "~/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml",
+        "capture_nodes": [
+          "/radiation_field_server"
+        ],
+        "monitor_names": [
+          "radiation_field_server"
+        ],
+        "notes": "ВПИСАТЬ фактические D_noise, D_crit, k, cap",
+        "attach": []
+      }
+    },
+    "routes": {
+      "R1": {
+        "planned_start": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "goal": [
+          6.0,
+          22.0,
+          0.0
+        ]
+      },
+      "R2": {
+        "planned_start": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "goal": [
+          6.0,
+          22.0,
+          0.0
+        ]
+      },
+      "R3": {
+        "planned_start": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "goal": [
+          6.0,
+          22.0,
+          0.0
+        ]
+      }
+    }
+  },
+  "sha256": {
+    "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy": "d6c62801d1fa8d62c2cdfe56eec954ae62d6b822f5d8b5c2adc68f78013d8b5a",
+    "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex_meta.json": "221d7ecbe5ef2ef8c2cfb42f8bcdc67f5106c684682dc28044347d7c02568d5e",
+    "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml": "825f0a9961874626a1fa49916b9e81cc9f08f7460eeead8d68ffcda7aa1068db",
+    "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml": "36163807a8e5e0ce93904a90ca69c9d53ebeb1361912eb401f407c61d83cfb12"
+  }
+}

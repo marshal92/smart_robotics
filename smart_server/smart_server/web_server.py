@@ -25,6 +25,18 @@ class MultiDirectoryRequestHandler(http.server.SimpleHTTPRequestHandler):
         if clean_path.startswith('/install') or clean_path.startswith('/src'):
             # Serve from workspace root
             return os.path.join(self.ws_root, clean_path.lstrip('/'))
+        elif clean_path.startswith('/packages/'):
+            parts = clean_path.lstrip('/').split('/')
+            if len(parts) >= 2:
+                pkg_name = parts[1]
+                try:
+                    from ament_index_python.packages import get_package_share_directory
+                    pkg_share = get_package_share_directory(pkg_name)
+                    remainder = os.path.join(*parts[2:]) if len(parts) > 2 else ''
+                    return os.path.join(pkg_share, remainder)
+                except Exception:
+                    pass
+            return os.path.join(self.ws_root, clean_path.lstrip('/'))
         else:
             # Serve everything else from the Vue 'dist' folder
             local_path = os.path.join(self.dist_dir, clean_path.lstrip('/'))
@@ -52,7 +64,7 @@ class WebServerNode(Node):
         self.ws_root = os.path.abspath(os.path.join(share_dir, '..', '..', '..', '..'))
         
         # Note the space in Infrastructure_as_Code 
-        self.dist_dir = os.path.join(self.ws_root, 'src', 'smart_robotics', 'Infrastructure_as_Code ', 'web_ui', 'dist')
+        self.dist_dir = os.path.join(self.ws_root, 'src', 'smart_robotics', 'Infrastructure_as_Code ', 'web_ui_2.0', 'dist')
         
         self.get_logger().info(f"Workspace root: {self.ws_root}")
         self.get_logger().info(f"Web UI dist folder: {self.dist_dir}")

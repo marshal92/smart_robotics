@@ -42,9 +42,9 @@ class MapToImageNode(Node):
         occ_mask = data > 25
         img[occ_mask] = [0, 0, 0, 255]
         
-        # Unknown space: Transparent! This will look gorgeous in 3D
+        # Unknown space: Medium Grey instead of transparent (to avoid looking pitch black)
         unk_mask = data < 0
-        img[unk_mask] = [0, 0, 0, 0]
+        img[unk_mask] = [128, 128, 128, 255]
         
         # OpenCV uses BGRA by default, but White/Black are the same.
         # We need to flip the image vertically because ROS Origin is at the bottom-left,

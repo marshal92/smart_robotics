@@ -4,6 +4,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Appe
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Command
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.conditions import IfCondition, UnlessCondition
+from launch.actions import TimerAction
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.parameter_descriptions import ParameterValue
@@ -92,9 +93,23 @@ def generate_launch_description():
             "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock",
             "/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist",
             "/odom/unfiltered@nav_msgs/msg/Odometry[gz.msgs.Odometry",
-            "/imu/data@sensor_msgs/msg/Imu[gz.msgs.IMU"#,
-            #"/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model"
+            "/imu/data@sensor_msgs/msg/Imu[gz.msgs.IMU",
+            "/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model"
+        ],
+        remappings=[
+            ('/joint_states', '/wheel_joint_states')
         ]
+    )
+
+    jsp_node = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_publisher',
+        parameters=[{
+            'use_sim_time': True,
+            'source_list': ['/arm_joint_states', '/wheel_joint_states'],
+            'rate': 50
+        }]
     )
 
     gz_bridge_2d_node = Node(
@@ -123,30 +138,48 @@ def generate_launch_description():
         remappings=[("odometry/filtered", "/odom")]
     )
 
-    # Smart mixer for simulation (Combines the arm from Gazebo and zeros for the wheels)
-    jsp_node = Node(
-        #condition=IfCondition(use_arm),
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        name='joint_state_publisher_sim',
-        parameters=[{
-            'use_sim_time': True,
-            'source_list': ['/arm_joint_states']
-        }]
-    )
-
     # Load arm controller
-    load_arm_controller = ExecuteProcess(
+    load_arm_controller = Node(
         condition=IfCondition(use_arm),
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 'arm_controller'],
-        output='screen'
+        package="controller_manager",
+        executable="spawner",
+        arguments=["arm_controller", "--controller-manager", "/controller_manager"],
+        output="screen",
     )
 
     # Load joint state broadcaster
-    load_joint_state_broadcaster = ExecuteProcess(
+    load_joint_state_broadcaster = Node(
         condition=IfCondition(use_arm),
-        cmd=['ros2', 'control', 'load_controller', '--set-state', 'active', 'joint_state_broadcaster'],
-        output='screen'
+        package="controller_manager",
+        executable="spawner",
+        arguments=[
+            "joint_state_broadcaster", 
+            "--controller-manager", "/controller_manager"
+        ],
+        output="screen",
+    )
+
+    from launch.event_handlers import OnProcessExit, OnShutdown
+    from launch.actions import ExecuteProcess, RegisterEventHandler
+
+    # Spawners will only start after the robot entity is fully spawned in Gazebo
+    spawners = RegisterEventHandler(
+        event_handler=OnProcessExit(
+            target_action=spawn_node,
+            on_exit=[load_arm_controller, load_joint_state_broadcaster],
+        )
+    )
+
+    # Force kill Gazebo on launch shutdown to prevent zombies (known gz_ros2_control deadlock)
+    zombie_cleanup = RegisterEventHandler(
+        event_handler=OnShutdown(
+            on_shutdown=[
+                ExecuteProcess(
+                    cmd=['pkill', '-9', '-f', 'gz'],
+                    shell=True
+                )
+            ]
+        )
     )
 
     return LaunchDescription([
@@ -157,7 +190,7 @@ def generate_launch_description():
         gz_bridge_3d_node, 
         #pc_to_laserscan_node, 
         ekf_node,
-        load_arm_controller,
-        load_joint_state_broadcaster,
+        spawners,
+        zombie_cleanup,
         jsp_node
     ])
