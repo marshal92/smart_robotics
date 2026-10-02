@@ -73,6 +73,36 @@
           <span>Shadow</span>
         </button>
 
+        <!-- Speed Toggle with Context Menu -->
+        <div style="position: relative; display: inline-block;">
+          <button 
+            @click="showSpeedMenu = !showSpeedMenu"
+            :class="['dt-btn', showSpeedMenu ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+            style="min-width: 65px;"
+          >
+            <span>v: {{ maxSpeed.toFixed(1) }}</span>
+          </button>
+          
+          <div v-if="showSpeedMenu" class="world-menu" style="bottom: 110%;">
+            <div class="world-menu-slider" style="padding: 10px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; color: #ccc;">
+                <span>Max Speed</span>
+                <span>{{ maxSpeed.toFixed(1) }} m/s</span>
+              </div>
+              <input 
+                type="range" 
+                min="0.1" 
+                max="2.0" 
+                step="0.1" 
+                v-model.number="tempMaxSpeed" 
+                @change="applyMaxSpeed"
+                style="width: 100%;"
+                :disabled="isSettingSpeed"
+              >
+            </div>
+          </div>
+        </div>
+
         <!-- Nav Goal Toggle -->
         <button 
           @click="toggleNavMode"
@@ -101,17 +131,19 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js'
 import { createViewer } from '../../three/createViewer'
 import { SimpleTFClient } from '../../services/simpleTfClient'
 import { createURDFRobot } from '../../three/robotModel'
+import { useSdfWorlds } from './composables/useSdfWorlds'
+import { useMapLayer } from './composables/useMapLayer'
+import { useRadiationMap } from './composables/useRadiationMap'
+import { useWaypoints } from './composables/useWaypoints'
+import { useNavSpeed } from './composables/useNavSpeed'
 
 const store = useRosStore()
 const viewerInitialized = ref(false)
 const hoverCoords = ref(null)
 const isNavMode = ref(false)
-const showWaypoints = ref(false)
-const showRadiation = ref(false)
-const show3DWorld = ref(false)
 const showShadowRobot = ref(false)
 const showWorldMenu = ref(false)
-const sdfOpacity = ref(0.7)
+const showSpeedMenu = ref(false)
 const wrapper = ref(null)
 const robotCoords = ref(null)
 
@@ -130,120 +162,58 @@ const toggleFullscreen = () => {
 let viewer = null
 let tfClient = null
 let navGoalArrow = null 
-const waypointMeshes = {}
-let radiationPlane = null
-let sdfWorldGroup = null
-let robotGroup = new THREE.Group()
-let shadowGroup = new THREE.Group()
+
 let urdfModel = null
 
-// Load SDF World logic
-const loadSDFWorld = (worldName) => {
-  if (!viewer) return
-    const worldUrl = 'http://' + window.location.hostname + ':8080/install/smart_sim2real/share/smart_sim2real/worlds/' + worldName + '.sdf'
-    
-    // Remove old world
-    if (sdfWorldGroup) {
-      viewer.scene.remove(sdfWorldGroup)
-    }
+let robotGroup = new THREE.Group()
+let shadowGroup = new THREE.Group()
 
-    sdfWorldGroup = new THREE.Group()
-    sdfWorldGroup.visible = show3DWorld.value
-    viewer.scene.add(sdfWorldGroup)
+const viewerRef = ref(null)
+const {
+  show3DWorld,
+  sdfOpacity,
+  loadSDFWorld,
+  updateSDFOpacity,
+  toggle3DWorld,
+  disposeSDFWorld
+} = useSdfWorlds(viewerRef)
 
-    fetch(worldUrl)
-      .then(response => response.text())
-      .then(xmlString => {
-        const parser = new DOMParser()
-        const xmlDoc = parser.parseFromString(xmlString, 'text/xml')
-        
-        const models = xmlDoc.querySelectorAll('model')
-        models.forEach(model => {
-          const modelGroup = new THREE.Group()
-          
-          // Parse model pose
-          const poseTags = model.querySelectorAll('pose')
-          const mPoseTag = Array.from(poseTags).find(t => t.parentElement === model)
-          if (mPoseTag) {
-            const p = mPoseTag.textContent.trim().split(/\s+/).map(Number)
-            modelGroup.position.set(p[0], p[1], p[2])
-            modelGroup.rotation.set(p[3], p[4], p[5], 'ZYX')
-          }
-          sdfWorldGroup.add(modelGroup)
-          
-          // Parse links
-          const links = model.querySelectorAll('link')
-          links.forEach(link => {
-            const linkGroup = new THREE.Group()
-            
-            const lPoseTag = Array.from(link.querySelectorAll('pose')).find(t => t.parentElement === link)
-            if (lPoseTag) {
-              const p = lPoseTag.textContent.trim().split(/\s+/).map(Number)
-              linkGroup.position.set(p[0], p[1], p[2])
-              linkGroup.rotation.set(p[3], p[4], p[5], 'ZYX')
-            }
-            modelGroup.add(linkGroup)
-            
-            // Parse visuals
-            const visuals = link.querySelectorAll('visual')
-            visuals.forEach(visual => {
-              const meshTag = visual.querySelector('geometry mesh')
-              if (!meshTag) return
-              
-              let uri = meshTag.querySelector('uri').textContent
-              if (uri.includes('smart_sim2real')) {
-                const parts = uri.split('smart_sim2real')
-                const relativePath = parts[parts.length - 1]
-                uri = 'http://' + window.location.hostname + ':8080/install/smart_sim2real/share/smart_sim2real' + relativePath
-              }
-              
-              const loader = new STLLoader()
-              loader.load(uri, (geometry) => {
-                geometry.computeVertexNormals()
-                
-                let color = 0x888888
-                const diffuseTag = visual.querySelector('material diffuse')
-                const ambientTag = visual.querySelector('material ambient')
-                const colorTag = diffuseTag || ambientTag
-                if (colorTag) {
-                  const rgba = colorTag.textContent.trim().split(/\s+/).map(Number)
-                  color = new THREE.Color(rgba[0] * 0.6, rgba[1] * 0.6, rgba[2] * 0.6).getHex()
-                }
-                
-                const material = new THREE.MeshStandardMaterial({
-                  color: color,
-                  roughness: 0.9,
-                  metalness: 0.1,
-                  transparent: true,
-                  opacity: sdfOpacity.value,
-                  depthWrite: sdfOpacity.value > 0.99,
-                  depthTest: true
-                })
-                
-                const mesh = new THREE.Mesh(geometry, material)
-                mesh.castShadow = true
-                mesh.receiveShadow = true
-                
-                const vPoseTag = Array.from(visual.querySelectorAll('pose')).find(t => t.parentElement === visual)
-                if (vPoseTag) {
-                  const p = vPoseTag.textContent.trim().split(/\s+/).map(Number)
-                  mesh.position.set(p[0], p[1], p[2])
-                  mesh.rotation.set(p[3], p[4], p[5], 'ZYX')
-                }
-                
-                const scaleTag = meshTag.querySelector('scale')
-                if (scaleTag) {
-                  const s = scaleTag.textContent.trim().split(/\s+/).map(Number)
-                  mesh.scale.set(s[0], s[1], s[2])
-                }
-                
-                linkGroup.add(mesh)
-              })
-            })
-          })
-        })
-      })
-      .catch(err => console.error('Failed to load SDF world:', err))
+const {
+  setupMap,
+  getMapPlane,
+  getMapResolution,
+  getMapOrigin,
+  getMapOrientation,
+  disposeMap
+} = useMapLayer(viewerRef)
+
+const {
+  showRadiation,
+  setupRadiation,
+  toggleRadiation,
+  disposeRadiation
+} = useRadiationMap(viewerRef, getMapResolution, getMapOrigin, getMapOrientation)
+
+const {
+  showWaypoints,
+  setupWaypoints,
+  toggleWaypoints,
+  disposeWaypoints
+} = useWaypoints(viewerRef)
+
+const {
+  maxSpeed,
+  isSettingSpeed,
+  setMaxSpeed
+} = useNavSpeed()
+
+const tempMaxSpeed = ref(maxSpeed.value)
+
+function applyMaxSpeed() {
+  const ros = getRosInstance()
+  if (ros) {
+    setMaxSpeed(ros, tempMaxSpeed.value)
+  }
 }
 
 function loadWorld(name) {
@@ -251,47 +221,16 @@ function loadWorld(name) {
   loadSDFWorld(name)
 }
 
-function toggleRadiation() {
-  showRadiation.value = !showRadiation.value
-  if (radiationPlane) {
-    radiationPlane.visible = showRadiation.value
-  }
-}
 
 function toggleNavMode() {
   isNavMode.value = !isNavMode.value
 }
 
-function toggleWaypoints() {
-  showWaypoints.value = !showWaypoints.value
-  for (let key in waypointMeshes) {
-    waypointMeshes[key].visible = showWaypoints.value
-  }
-}
-
-function updateSDFOpacity() {
-  if (sdfWorldGroup) {
-    sdfWorldGroup.traverse((child) => {
-      if (child.isMesh && child.material) {
-        child.material.transparent = true
-        child.material.opacity = sdfOpacity.value
-        child.material.depthWrite = sdfOpacity.value > 0.99
-      }
-    })
-  }
-}
 
 function toggleShadow() {
   showShadowRobot.value = !showShadowRobot.value
   if (viewer && viewer.shadowGroup) {
     viewer.shadowGroup.visible = showShadowRobot.value
-  }
-}
-
-function toggle3DWorld() {
-  show3DWorld.value = !show3DWorld.value
-  if (sdfWorldGroup) {
-    sdfWorldGroup.visible = show3DWorld.value
   }
 }
 
@@ -305,8 +244,59 @@ onMounted(() => {
 watch(() => store.isConnected, (newVal) => {
   if (newVal && !viewerInitialized.value) {
     connectSceneData()
+  } else if (!newVal && viewerInitialized.value) {
+    disconnectSceneData()
   }
 })
+
+// Track active topic subscriptions so we can unsubscribe on disconnect
+let activeTopics = []
+
+// Event handlers for navigation
+let mouseMoveHandler = null
+let touchStartHandler = null
+let touchEndHandler = null
+let themeChangedHandler = null
+
+function disconnectSceneData() {
+  console.log("Disconnecting Scene Data and cleaning up...")
+  
+  // Unsubscribe from all ROS topics
+  activeTopics.forEach(topic => {
+    if (topic && topic.unsubscribe) {
+      topic.unsubscribe()
+    }
+  })
+  activeTopics = []
+  
+  if (tfClient) {
+    if (tfClient.dispose) tfClient.dispose()
+    tfClient = null
+  }
+  
+  if (urdfModel) {
+    if (urdfModel.dispose) urdfModel.dispose()
+    viewer.scene.remove(urdfModel)
+    urdfModel = null
+  }
+  
+  disposeWaypoints()
+  disposeRadiation()
+  disposeMap()
+  disposeSDFWorld()
+  
+  // Remove phantom event listeners
+  const container = document.getElementById('viewer3d')
+  if (container) {
+    if (mouseMoveHandler) container.removeEventListener('mousemove', mouseMoveHandler)
+    container.removeEventListener('mousedown', handleDragStart, true)
+    if (touchStartHandler) container.removeEventListener('touchstart', touchStartHandler, { passive: false })
+  }
+  window.removeEventListener('mouseup', handleDragEnd, true)
+  if (touchEndHandler) window.removeEventListener('touchend', touchEndHandler, { passive: false })
+
+  viewerInitialized.value = false
+}
 
 function createScene() {
   const container = document.getElementById('viewer3d')
@@ -320,6 +310,7 @@ function createScene() {
   viewer = createViewer(container, {
     background: isLight ? 0x555555 : 0x111111
   })
+  viewerRef.value = viewer
 
   window.addEventListener('theme-changed', (e) => {
     if (viewer) {
@@ -332,6 +323,8 @@ function createScene() {
   viewer.renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
   viewer.scene.add(robotGroup)
+  
+  shadowGroup.visible = showShadowRobot.value
   viewer.scene.add(shadowGroup)
   viewer.shadowGroup = shadowGroup // Store in viewer to access in loader
   
@@ -342,27 +335,8 @@ function createScene() {
     // Fix missing normals from raw STL
     geometry.computeVertexNormals()
     
-    const material = new THREE.MeshPhysicalMaterial({ 
-      color: 0x1565c0,          // Rich blue
-      emissive: 0x051020,
-      roughness: 0.5,           // Increased roughness for less glare
-      metalness: 0.4,           // Less metallic
-      clearcoat: 0.2,           // Very subtle clearcoat
-      clearcoatRoughness: 0.4,
-      reflectivity: 0.7,
-      depthWrite: true,
-      depthTest: true
-    })
-    const robotMesh = new THREE.Mesh(geometry, material)
+    // Removed manual robotMesh because urdfRobot now successfully loads the chassis via intercepted file:// paths!
     
-    robotMesh.castShadow = true
-    robotMesh.receiveShadow = true
-    
-    robotMesh.scale.set(0.001, 0.001, 0.001)
-    robotMesh.rotation.set(0, 0, 0)
-    
-    robotGroup.add(robotMesh)
-
     // === SHADOW ROBOT MESH ===
     const shadowMaterial = new THREE.MeshStandardMaterial({
       color: 0x00ffff,
@@ -398,13 +372,20 @@ function connectSceneData() {
   })
 
   // 4. Setup TF update for Robot and Shadow
+  let lastCoordUpdate = 0
   const updateRobotPose = (tf) => {
     robotGroup.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
     robotGroup.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
-    robotCoords.value = { x: tf.translation.x, y: tf.translation.y }
+    
+    // Throttle Vue reactivity to 10Hz to prevent layout thrashing
+    const now = performance.now()
+    if (now - lastCoordUpdate > 100) {
+      robotCoords.value = { x: tf.translation.x, y: tf.translation.y }
+      lastCoordUpdate = now
+    }
   }
   
-  tfClient.subscribe('base_link', updateRobotPose)
+  tfClient.subscribe('base_footprint', updateRobotPose)
 
   const updateShadowPose = (tf) => {
     shadowGroup.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
@@ -417,123 +398,9 @@ function connectSceneData() {
   urdfModel = createURDFRobot(ros, viewer, tfClient)
 
   // 5. Custom Fast Image Map Renderer
-  let mapPlane = null
-  let mapResolution = 0.05
-  let mapOrigin = { x: 0, y: 0, z: 0 }
-  let mapOrientation = { x: 0, y: 0, z: 0, w: 1 }
+  setupMap(ros)
 
-  const metaSub = new ROSLIB.Topic({
-    ros: ros,
-    name: '/map_metadata',
-    messageType: 'nav_msgs/msg/MapMetaData'
-  })
-  
-  metaSub.subscribe((msg) => {
-    mapResolution = msg.resolution
-    mapOrigin = msg.origin.position
-    mapOrientation = msg.origin.orientation
-  })
-  
-  const mapSub = new ROSLIB.Topic({
-    ros: ros,
-    name: '/map_image/compressed',
-    messageType: 'sensor_msgs/msg/CompressedImage',
-    throttle_rate: 200 // 5Hz
-  })
-  
-  mapSub.subscribe((msg) => {
-    const img = new Image()
-    img.src = 'data:image/png;base64,' + msg.data
-    img.onload = () => {
-      const texture = new THREE.Texture(img)
-      texture.needsUpdate = true
-      texture.magFilter = THREE.NearestFilter
-      texture.minFilter = THREE.NearestFilter
-      
-      const width = img.width * mapResolution
-      const height = img.height * mapResolution
-      const geometry = new THREE.PlaneGeometry(width, height)
-      geometry.translate(width / 2, height / 2, 0)
-
-      if (!mapPlane) {
-        const material = new THREE.MeshLambertMaterial({ 
-          color: 0x999999, // Darkens the map by reflecting less light
-          map: texture,
-          transparent: false,
-          depthWrite: true, // Normal depth
-          side: THREE.FrontSide
-        })
-        mapPlane = new THREE.Mesh(geometry, material)
-        
-        // Push map 5mm down to stop Z-fighting without making the robot float
-        mapPlane.position.set(mapOrigin.x, mapOrigin.y, mapOrigin.z - 0.005)
-        mapPlane.quaternion.set(mapOrientation.x, mapOrientation.y, mapOrientation.z, mapOrientation.w)
-        
-        // Receive shadows if we enable them later
-        mapPlane.receiveShadow = true
-        
-        viewer.scene.add(mapPlane)
-      } else {
-        mapPlane.material.map.dispose()
-        mapPlane.material.map = texture
-        
-        mapPlane.geometry.dispose()
-        mapPlane.geometry = geometry
-        mapPlane.position.set(mapOrigin.x, mapOrigin.y, mapOrigin.z - 0.005)
-        mapPlane.quaternion.set(mapOrientation.x, mapOrientation.y, mapOrientation.z, mapOrientation.w)
-      }
-    }
-  })
-
-  // Radiation Overlay Plane
-  const radSub = new ROSLIB.Topic({
-    ros: ros,
-    name: '/radiation_image/compressed',
-    messageType: 'sensor_msgs/msg/CompressedImage',
-    throttle_rate: 200
-  })
-  
-  radSub.subscribe((msg) => {
-    const img = new Image()
-    img.src = 'data:image/png;base64,' + msg.data
-    img.onload = () => {
-      const texture = new THREE.Texture(img)
-      texture.needsUpdate = true
-      texture.magFilter = THREE.NearestFilter
-      texture.minFilter = THREE.NearestFilter
-      
-      const width = img.width * mapResolution
-      const height = img.height * mapResolution
-      const geometry = new THREE.PlaneGeometry(width, height)
-      geometry.translate(width / 2, height / 2, 0)
-
-      if (!radiationPlane) {
-        const material = new THREE.MeshBasicMaterial({ 
-          map: texture,
-          transparent: true,
-          opacity: 0.85,
-          depthWrite: false, // Don't write to depth buffer to avoid Z-fighting
-          side: THREE.FrontSide
-        })
-        radiationPlane = new THREE.Mesh(geometry, material)
-        
-        // Push radiation layer slightly above the map
-        radiationPlane.position.set(mapOrigin.x, mapOrigin.y, mapOrigin.z + 0.005)
-        radiationPlane.quaternion.set(mapOrientation.x, mapOrientation.y, mapOrientation.z, mapOrientation.w)
-        radiationPlane.visible = showRadiation.value
-        
-        viewer.scene.add(radiationPlane)
-      } else {
-        radiationPlane.material.map.dispose()
-        radiationPlane.material.map = texture
-        
-        radiationPlane.geometry.dispose()
-        radiationPlane.geometry = geometry
-        radiationPlane.position.set(mapOrigin.x, mapOrigin.y, mapOrigin.z + 0.005)
-        radiationPlane.quaternion.set(mapOrientation.x, mapOrientation.y, mapOrientation.z, mapOrientation.w)
-      }
-    }
-  })
+  setupRadiation(ros)
 
   // 6. Load SDF World initially
   loadSDFWorld('213')
@@ -571,6 +438,7 @@ function connectSceneData() {
   })
 
   function getMapIntersection(event) {
+    const mapPlane = getMapPlane()
     if (!mapPlane) return null
     const rect = container.getBoundingClientRect()
     let clientX = event.clientX
@@ -594,7 +462,7 @@ function connectSceneData() {
     return intersects.length > 0 ? intersects[0].point : null
   }
 
-  container.addEventListener('mousemove', (event) => {
+  mouseMoveHandler = (event) => {
     const point = getMapIntersection(event)
     if (point) {
       hoverCoords.value = { x: point.x, y: point.y }
@@ -621,7 +489,8 @@ function connectSceneData() {
         navGoalArrow.visible = true
       }
     }
-  }, { passive: false })
+  }
+  container.addEventListener('mousemove', mouseMoveHandler, { passive: false })
 
   const handleDragStart = (event) => {
     if ((event.button !== undefined && event.button !== 0) || !isNavMode.value) return 
@@ -641,10 +510,11 @@ function connectSceneData() {
   }
 
   container.addEventListener('mousedown', handleDragStart, true)
-  container.addEventListener('touchstart', (e) => {
+  touchStartHandler = (e) => {
     if (isNavMode.value) e.preventDefault()
     handleDragStart(e)
-  }, { passive: false })
+  }
+  container.addEventListener('touchstart', touchStartHandler, { passive: false })
 
   const handleDragEnd = (event) => {
     if (isNavMode.value && dragStartPoint) {
@@ -690,89 +560,14 @@ function connectSceneData() {
   }
 
   window.addEventListener('mouseup', handleDragEnd, true)
-  window.addEventListener('touchend', (e) => {
+  touchEndHandler = (e) => {
     if (isNavMode.value) e.preventDefault()
     handleDragEnd(e)
-  }, { passive: false })
+  }
+  window.addEventListener('touchend', touchEndHandler, { passive: false })
 
   // 7. Parse Smart Waypoints Markers
-  const waypointSub = new ROSLIB.Topic({
-    ros: ros,
-    name: '/smart_waypoints_markers',
-    messageType: 'visualization_msgs/msg/MarkerArray'
-  })
-
-  waypointSub.subscribe((msg) => {
-    msg.markers.forEach(m => {
-      const key = m.ns + m.id
-      if (waypointMeshes[key]) {
-        viewer.scene.remove(waypointMeshes[key])
-        delete waypointMeshes[key]
-      }
-      
-      if (m.action === 2) return // DELETE
-      
-      let mMesh = null
-      
-      if (m.type === 3) { // Cylinder
-        const sx = (m.scale.x || 1) / 4
-        const sy = (m.scale.y || 1) / 4
-        const sz = (m.scale.z || 1) / 4
-        const geometry = new THREE.CylinderGeometry(sx/2, sy/2, sz, 32)
-        geometry.rotateX(Math.PI / 2)
-        
-        const isTransparent = m.color.a < 1.0
-        const material = new THREE.MeshStandardMaterial({ 
-          color: new THREE.Color(m.color.r, m.color.g, m.color.b),
-          transparent: isTransparent,
-          opacity: m.color.a || 1.0,
-          depthWrite: !isTransparent 
-        })
-        mMesh = new THREE.Mesh(geometry, material)
-        
-      } else if (m.type === 9) { // Text View-Facing (Sprite)
-        const canvas = document.createElement('canvas')
-        const ctx = canvas.getContext('2d')
-        canvas.width = 256
-        canvas.height = 64
-        
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        
-        ctx.font = 'bold 24px Arial'
-        ctx.fillStyle = `rgba(${Math.round(m.color.r*255)}, ${Math.round(m.color.g*255)}, ${Math.round(m.color.b*255)}, ${m.color.a})`
-        ctx.textAlign = 'center'
-        ctx.textBaseline = 'middle'
-        
-        ctx.shadowColor = 'transparent'
-        ctx.shadowBlur = 0
-        
-        ctx.lineWidth = 2
-        ctx.strokeStyle = 'black'
-        ctx.strokeText(m.text, canvas.width/2, canvas.height/2)
-        ctx.fillText(m.text, canvas.width/2, canvas.height/2)
-        
-        const texture = new THREE.CanvasTexture(canvas)
-        // Use alphaTest to completely discard the empty canvas background, preventing black rectangles
-        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, alphaTest: 0.5 })
-        mMesh = new THREE.Sprite(material)
-        
-        const scaleBase = (m.scale.z > 0 ? m.scale.z * 10 : 2) / 4
-        mMesh.scale.set(scaleBase * 4, scaleBase, 1) 
-      }
-
-      if (mMesh) {
-        mMesh.position.set(m.pose.position.x, m.pose.position.y, m.pose.position.z)
-        if (m.type !== 9) {
-          mMesh.quaternion.set(m.pose.orientation.x, m.pose.orientation.y, m.pose.orientation.z, m.pose.orientation.w)
-        }
-        
-        mMesh.visible = showWaypoints.value 
-        
-        viewer.scene.add(mMesh)
-        waypointMeshes[key] = mMesh
-      }
-    })
-  })
+  setupWaypoints(ros)
 
   // 8. Custom Navigation Path Visualization (Fixes ROS3D deprecated Geometry)
   let pathLine = null
@@ -782,6 +577,7 @@ function connectSceneData() {
     name: '/plan',
     messageType: 'nav_msgs/msg/Path'
   })
+  activeTopics.push(pathSub)
 
   pathSub.subscribe((message) => {
     if (pathLine) {
@@ -815,6 +611,7 @@ function connectSceneData() {
     name: '/shadow_marker',
     messageType: 'visualization_msgs/msg/Marker'
   })
+  activeTopics.push(shadowMarkerSub)
 
   shadowMarkerSub.subscribe((msg) => {
     if (viewer.shadowRobotMesh) {
@@ -832,6 +629,7 @@ function connectSceneData() {
     name: '/shadow_path',
     messageType: 'nav_msgs/msg/Path'
   })
+  activeTopics.push(shadowPathSub)
 
   shadowPathSub.subscribe((message) => {
     if (shadowPathLine) {

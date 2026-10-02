@@ -20,16 +20,21 @@ export class SimpleTFClient {
     this._p = new THREE.Vector3()
     this._q = new THREE.Quaternion()
     
+    // Cached objects for transform loops to prevent GC pauses
+    this._tempVec = new THREE.Vector3()
+    this._tempQuat = new THREE.Quaternion()
+    
+    this._isDisposed = false
+    
     this._needsUpdate = false
     this._updateLoop = this._updateLoop.bind(this)
     requestAnimationFrame(this._updateLoop)
     
-    // Subscribe to /tf
+    // Subscribe to /tf without artificial throttling for maximum smoothness
     this.tfSub = new ROSLIB.Topic({
       ros: this.ros,
       name: '/tf',
-      messageType: 'tf2_msgs/msg/TFMessage',
-      throttle_rate: 33 // ~30Hz max rate for Web UI TF updates
+      messageType: 'tf2_msgs/msg/TFMessage'
     })
     this.tfSub.subscribe(this.processTFMessage.bind(this))
     
@@ -56,11 +61,22 @@ export class SimpleTFClient {
   }
 
   _updateLoop() {
+    if (this._isDisposed) return
+    
     if (this._needsUpdate) {
       this.notifyCallbacks()
       this._needsUpdate = false
     }
     requestAnimationFrame(this._updateLoop)
+  }
+
+  dispose() {
+    this._isDisposed = true
+    if (this.tfSub) {
+      this.tfSub.unsubscribe()
+      this.tfSub = null
+    }
+    this.callbacks = {}
   }
 
   notifyCallbacks() {
@@ -104,12 +120,12 @@ export class SimpleTFClient {
     // Apply transforms from fixedFrame (top) down to requested frameId (bottom)
     for (let i = path.length - 1; i >= 0; i--) {
       const tf = path[i]
-      this._p.set(tf.translation.x, tf.translation.y, tf.translation.z)
-      this._q.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
+      this._tempVec.set(tf.translation.x, tf.translation.y, tf.translation.z)
+      this._tempQuat.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
       
-      this._p.applyQuaternion(this._rot)
-      this._pos.add(this._p)
-      this._rot.multiply(this._q)
+      this._tempVec.applyQuaternion(this._rot)
+      this._pos.add(this._tempVec)
+      this._rot.multiply(this._tempQuat)
     }
     
     return {

@@ -1,12 +1,12 @@
 <template>
   <div class="block-container">
-    <h3 class="block-title">Block 1: Core Systems & Teleop</h3>
     <div class="tabs">
-      <button class="tab-btn" :class="{ active: activeTab === 'manager' }" @click="setTab('manager')">Mission Manager</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'manager' }" @click="setTab('manager')">Manager</button>
       <button class="tab-btn" :class="{ active: activeTab === 'base' }" @click="setTab('base')">Direct Teleop</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'radiation' }" @click="setTab('radiation')">Radiation</button>
     </div>
 
-    <!-- Tab 1: Mission Manager -->
+    <!-- Tab 1: Manager -->
     <div v-show="activeTab === 'manager'" class="tab-content active">
       <div class="mission-groups">
         
@@ -25,6 +25,7 @@
             <button class="cmd-btn border-btn b-blue" @click="pubSys('start_kitchen')">Kitchen <span>Load kitchen config</span></button>
             <button class="cmd-btn border-btn b-blue" @click="pubSys('start_shelter_zero')">Shelter Zero <span>Launch default seq</span></button>
             <button class="cmd-btn border-btn b-blue" @click="pubSys('start_freeride')">Freeride <span>Manual mode</span></button>
+            <button class="cmd-btn border-btn b-purple" @click="pubSys('start:mapping:none')">GTO Mapping <span>Create clean map</span></button>
           </div>
           <div class="custom-map-grid">
             <input type="text" v-model="mapNameSave" placeholder="Map name to save" class="map-input compact-input" />
@@ -48,7 +49,12 @@
 
 
 
-        <!-- Group 5: Radiation Mapping -->
+      </div>
+    </div>
+
+    <!-- Tab 3: Radiation -->
+    <div v-show="activeTab === 'radiation'" class="tab-content active">
+      <div class="mission-groups">
         <div class="mission-group">
           <h4 class="group-title">Radiation Mapping</h4>
           <div class="small-grid">
@@ -60,7 +66,6 @@
             <button class="cmd-btn border-btn b-blue" @click="pubSys('rad_save')">Rad Save <span>Save to disk</span></button>
           </div>
         </div>
-
       </div>
     </div>
 

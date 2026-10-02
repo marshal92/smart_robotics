@@ -24,6 +24,8 @@ Our custom `SimpleTFClient` completely eliminates GC overhead by:
 
 ### 2. High-Performance Sensor Rendering
 *   **Maps & Radiation:** Instead of streaming heavy PointCloud2 data or OccupancyGrids directly to the browser, the backend (`smart_server` and `smart_radiation`) compresses these fields into colored PNGs. The Web UI subscribes to `sensor_msgs/msg/CompressedImage` and projects them instantly onto 3D planes as textures. This allows for 4K-resolution maps with almost zero CPU footprint.
+    *   **Atomic Sync:** Because WebSockets and Javascript run asynchronously, receiving the image and map coordinates separately creates visual jitter. To solve this, the exact `origin` and `resolution` are packed atomically into the string `frame_id` field of the `CompressedImage` message, guaranteeing the map geometry is strictly locked to its pixels.
+    *   **Dynamic Texture Reallocation:** During SLAM exploration, map sizes dynamically change. WebGL textures cannot be resized in place; therefore, the frontend forcefully disposes and rebuilds GPU textures whenever dimensions drift, preventing the UI from freezing.
 
 ### 3. Dynamic URDF Loading
 The UI no longer relies on hardcoded STL meshes for the robot base. It uses `urdf-loader` to dynamically download the XML string from `/robot_description`, parse the kinematic tree, and load all associated `.STL` visuals. It then subscribes directly to `/joint_states` to animate components (like the manipulator arm) in real-time natively in Three.js.

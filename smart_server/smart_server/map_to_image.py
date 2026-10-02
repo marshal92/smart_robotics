@@ -47,8 +47,8 @@ class MapToImageNode(Node):
         img[unk_mask] = [128, 128, 128, 255]
         
         # OpenCV uses BGRA by default, but White/Black are the same.
-        # We need to flip the image vertically because ROS Origin is at the bottom-left,
-        # whereas standard image UV coordinates start at top-left.
+        # We MUST flip the image vertically because OpenCV encodes img[0] as the top of the PNG,
+        # and ThreeJS (with flipY=true) maps the bottom of the PNG to v=0.
         img = cv2.flip(img, 0)
         
         # Compress to PNG
@@ -59,6 +59,13 @@ class MapToImageNode(Node):
             
         img_msg = CompressedImage()
         img_msg.header = msg.header
+        
+        # Atomically embed metadata to bypass Zenoh topic limits
+        o = msg.info.origin.position
+        q = msg.info.origin.orientation
+        meta_str = f"map|{msg.info.resolution}|{o.x}|{o.y}|{o.z}|{q.x}|{q.y}|{q.z}|{q.w}"
+        img_msg.header.frame_id = meta_str
+        
         img_msg.format = "png"
         img_msg.data = encoded_image.tobytes()
         

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import SingleThreadedExecutor
 from std_msgs.msg import Float32
 from nav_msgs.msg import OccupancyGrid
 from rcl_interfaces.msg import SetParametersResult
@@ -51,12 +52,15 @@ class VirtualGeigerWorker(Node):
         try:
             trans = self.tf_buffer.lookup_transform('map', 'base_footprint', rclpy.time.Time())
             rx, ry = trans.transform.translation.x, trans.transform.translation.y
-        except Exception:
+        except Exception as e:
+            self.get_logger().error(f"Geiger TF Error: {e}")
             return
         rad_x = int((rx - self.rad_ox) / self.rad_res)
         rad_y = int((ry - self.rad_oy) / self.rad_res)
         max_y, max_x = self.raw_dose_map.shape
         dose_val = float(self.raw_dose_map[rad_y, rad_x]) if 0 <= rad_x < max_x and 0 <= rad_y < max_y else 0.0
+        if np.isnan(dose_val):
+            dose_val = 0.0
         msg = Float32()
         msg.data = dose_val
         self.pub.publish(msg)
@@ -74,7 +78,7 @@ class VirtualGeigerManager(Node):
         
         self.worker = None
         self.executor_thread = None
-        self.executor = None
+        self.worker_executor = None
         
         self.add_on_set_parameters_callback(self.param_callback)
         self.pub = self.create_publisher(Float32, '/radiation/dose', 10)
@@ -86,16 +90,16 @@ class VirtualGeigerManager(Node):
         if is_active and self.worker is None:
             self.worker = VirtualGeigerWorker(use_sim_time=self.worker_sim_time)
             self.worker.load_truth_map(self.map_path_param)
-            self.executor = rclpy.executors.SingleThreadedExecutor()
-            self.executor.add_node(self.worker)
-            self.executor_thread = __import__('threading').Thread(target=self.executor.spin, daemon=True)
+            self.worker_executor = SingleThreadedExecutor()
+            self.worker_executor.add_node(self.worker)
+            self.executor_thread = __import__('threading').Thread(target=self.worker_executor.spin, daemon=True)
             self.executor_thread.start()
         elif not is_active and self.worker is not None:
-            self.executor.shutdown()
+            self.worker_executor.shutdown()
             self.executor_thread.join()
             self.worker.destroy_node()
             self.worker = None
-            self.executor = None
+            self.worker_executor = None
             msg = Float32()
             msg.data = 0.0
             self.pub.publish(msg)
@@ -148,7 +152,7 @@ def main(args=None):
         pass
     finally:
         if manager.worker is not None:
-            manager.executor.shutdown()
+            manager.worker_executor.shutdown()
             manager.executor_thread.join()
             manager.worker.destroy_node()
         manager.destroy_node()

@@ -14,32 +14,47 @@ class MultiDirectoryRequestHandler(http.server.SimpleHTTPRequestHandler):
     # This will be set by the node before serving
     ws_root = ""
     dist_dir = ""
+    _pkg_cache = {}
 
     def translate_path(self, path):
         """Map the URL path to the correct local directory."""
-        # Clean up path
+        # Clean up path and decode URL
         parsed_path = urllib.parse.urlparse(path)
-        clean_path = parsed_path.path
+        clean_path = urllib.parse.unquote(parsed_path.path)
         
         # Resolve aliases
         if clean_path.startswith('/install') or clean_path.startswith('/src'):
             # Serve from workspace root
-            return os.path.join(self.ws_root, clean_path.lstrip('/'))
+            requested_path = os.path.abspath(os.path.join(self.ws_root, clean_path.lstrip('/')))
+            if not requested_path.startswith(os.path.abspath(self.ws_root)):
+                return "/dev/null" # Deny access
+            return requested_path
         elif clean_path.startswith('/packages/'):
             parts = clean_path.lstrip('/').split('/')
             if len(parts) >= 2:
                 pkg_name = parts[1]
-                try:
-                    from ament_index_python.packages import get_package_share_directory
-                    pkg_share = get_package_share_directory(pkg_name)
-                    remainder = os.path.join(*parts[2:]) if len(parts) > 2 else ''
-                    return os.path.join(pkg_share, remainder)
-                except Exception:
-                    pass
-            return os.path.join(self.ws_root, clean_path.lstrip('/'))
+                # Restrict to known safe packages for serving meshes
+                allowed_pkgs = ['ugv_tracked_description', 'manipulator_description', 'smart_robotics']
+                if pkg_name in allowed_pkgs:
+                    try:
+                        if pkg_name not in self._pkg_cache:
+                            from ament_index_python.packages import get_package_share_directory
+                            self._pkg_cache[pkg_name] = get_package_share_directory(pkg_name)
+                        pkg_share = self._pkg_cache[pkg_name]
+                        remainder = os.path.join(*parts[2:]) if len(parts) > 2 else ''
+                        requested_path = os.path.abspath(os.path.join(pkg_share, remainder))
+                        # Verify the resolved path is within the package share directory
+                        if not requested_path.startswith(os.path.abspath(pkg_share)):
+                            return "/dev/null"
+                        return requested_path
+                    except Exception:
+                        pass
+            return "/dev/null"
         else:
             # Serve everything else from the Vue 'dist' folder
-            local_path = os.path.join(self.dist_dir, clean_path.lstrip('/'))
+            local_path = os.path.abspath(os.path.join(self.dist_dir, clean_path.lstrip('/')))
+            if not local_path.startswith(os.path.abspath(self.dist_dir)):
+                return "/dev/null"
             # Vue Router support: if path doesn't exist and doesn't have an extension, return index.html
             if not os.path.exists(local_path) and '.' not in os.path.basename(clean_path):
                 return os.path.join(self.dist_dir, 'index.html')

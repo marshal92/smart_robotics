@@ -1,6 +1,5 @@
 <template>
   <div class="block-container mission-block">
-    <h3 class="block-title mission-title">Block 2: Navigation & Waypoints</h3>
     
     <WaypointCreator activeMissionTab="global" />
   </div>

@@ -24,6 +24,12 @@ def generate_launch_description():
         description='Start the simulated geiger counter (set to false on real robot)'
     )
 
+    use_alara_reflex_arg = DeclareLaunchArgument(
+        'use_alara_reflex',
+        default_value='false',
+        description='Enable or disable the ALARA speed reflex plugin'
+    )
+
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     radiation_field_server_node = Node(
@@ -54,6 +60,7 @@ def generate_launch_description():
         executable='alara_speed_reflex_node',
         name='alara_speed_reflex_node',
         output='screen',
+        condition=IfCondition(LaunchConfiguration('use_alara_reflex')),
         parameters=[{'use_sim_time': use_sim_time}]
     )
     
@@ -70,6 +77,7 @@ def generate_launch_description():
         map_path_arg,
         use_sim_time_arg,
         use_virtual_geiger_arg,
+        use_alara_reflex_arg,
         radiation_field_server_node,
         radiation_mapper_node,
         virtual_geiger_node,
