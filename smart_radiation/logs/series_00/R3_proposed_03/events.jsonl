@@ -1,0 +1,2 @@
+{"event": "start", "t_ros_s": 903.608, "wall_unix_s": 1791123062.1922636}
+{"event": "finish", "t_ros_s": 943.111, "wall_unix_s": 1791123108.6719255, "result": "operator_success"}

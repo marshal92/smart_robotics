@@ -8,88 +8,88 @@
     "component_container_mt"
   ],
   "errors": [],
-  "host_cpu_mean_percent": 88.79599999999999,
+  "host_cpu_mean_percent": 88.87692307692308,
   "processes": [
     {
-      "pid": 32253,
-      "created": 1791122031.23,
+      "pid": 55353,
+      "created": 1791131900.26,
       "label": "radiation_field_server",
-      "samples": 25,
-      "cpu_mean_percent": 1.248,
-      "cpu_p95_percent": 1.7799999999999998,
-      "rss_peak_MiB": 126.5078125
+      "samples": 26,
+      "cpu_mean_percent": 1.4846153846153847,
+      "cpu_p95_percent": 1.925,
+      "rss_peak_MiB": 126.94921875
     },
     {
-      "pid": 32254,
-      "created": 1791122031.23,
+      "pid": 55356,
+      "created": 1791131900.27,
       "label": "radiation_mapper",
-      "samples": 25,
-      "cpu_mean_percent": 0.74,
+      "samples": 26,
+      "cpu_mean_percent": 0.7307692307692307,
       "cpu_p95_percent": 1.1,
-      "rss_peak_MiB": 67.0546875
+      "rss_peak_MiB": 66.875
     },
     {
-      "pid": 32255,
-      "created": 1791122031.24,
+      "pid": 55357,
+      "created": 1791131900.27,
       "label": "virtual_geiger",
-      "samples": 25,
-      "cpu_mean_percent": 84.608,
-      "cpu_p95_percent": 86.86,
-      "rss_peak_MiB": 72.78515625
+      "samples": 26,
+      "cpu_mean_percent": 85.10384615384615,
+      "cpu_p95_percent": 89.25,
+      "rss_peak_MiB": 72.703125
     },
     {
-      "pid": 33146,
-      "created": 1791122055.02,
+      "pid": 56090,
+      "created": 1791131914.6,
       "label": "controller_server",
-      "samples": 25,
-      "cpu_mean_percent": 23.92,
-      "cpu_p95_percent": 26.359999999999996,
-      "rss_peak_MiB": 50.73046875
+      "samples": 26,
+      "cpu_mean_percent": 23.54615384615385,
+      "cpu_p95_percent": 24.799999999999997,
+      "rss_peak_MiB": 46.5703125
     },
     {
-      "pid": 33148,
-      "created": 1791122055.03,
+      "pid": 56092,
+      "created": 1791131914.6,
       "label": "planner_server",
-      "samples": 25,
-      "cpu_mean_percent": 32.111999999999995,
-      "cpu_p95_percent": 47.55999999999998,
-      "rss_peak_MiB": 70.828125
+      "samples": 26,
+      "cpu_mean_percent": 32.86923076923077,
+      "cpu_p95_percent": 51.925000000000004,
+      "rss_peak_MiB": 70.58203125
     },
     {
-      "pid": 33151,
-      "created": 1791122055.03,
+      "pid": 56095,
+      "created": 1791131914.6,
       "label": "bt_navigator",
-      "samples": 25,
-      "cpu_mean_percent": 28.124000000000002,
-      "cpu_p95_percent": 31.080000000000002,
-      "rss_peak_MiB": 58.27734375
+      "samples": 26,
+      "cpu_mean_percent": 30.653846153846153,
+      "cpu_p95_percent": 32.0,
+      "rss_peak_MiB": 58.66796875
     },
     {
-      "pid": 33153,
-      "created": 1791122055.04,
+      "pid": 56097,
+      "created": 1791131914.61,
       "label": "velocity_smoother",
-      "samples": 25,
-      "cpu_mean_percent": 11.644,
-      "cpu_p95_percent": 12.24,
-      "rss_peak_MiB": 27.64453125
+      "samples": 26,
+      "cpu_mean_percent": 11.946153846153846,
+      "cpu_p95_percent": 12.6,
+      "rss_peak_MiB": 27.80078125
     },
     {
-      "pid": 33154,
-      "created": 1791122055.04,
+      "pid": 56098,
+      "created": 1791131914.61,
       "label": "collision_monitor",
-      "samples": 25,
-      "cpu_mean_percent": 12.38,
-      "cpu_p95_percent": 13.0,
-      "rss_peak_MiB": 37.34765625
+      "samples": 26,
+      "cpu_mean_percent": 12.496153846153847,
+      "cpu_p95_percent": 13.1,
+      "rss_peak_MiB": 37.19921875
     },
     {
-      "pid": 36441,
-      "created": 1791123031.28,
+      "pid": 60521,
+      "created": 1791132969.28,
       "label": "logger_self",
-      "samples": 25,
-      "cpu_mean_percent": 94.396,
-      "cpu_p95_percent": 96.16,
-      "rss_peak_MiB": 78.23046875
+      "samples": 26,
+      "cpu_mean_percent": 94.57307692307693,
+      "cpu_p95_percent": 98.2,
+      "rss_peak_MiB": 78.140625
     }
   ],
   "note": "RSS is per process, shared pages may be counted repeatedly; p95 is descriptive, not a confidence interval. No controller latency measured."

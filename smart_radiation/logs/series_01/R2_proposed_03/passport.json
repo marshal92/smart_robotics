@@ -1,6 +1,6 @@
 {
   "logger_version": 2,
-  "created_utc": "2026-10-04T14:03:58.609250+00:00",
+  "created_utc": "2026-10-04T16:50:45.625838+00:00",
   "arguments": {
     "self_test": false,
     "session": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/config/experiment.yaml",
@@ -77,8 +77,8 @@
     },
     "nav2_input.yaml": {
       "source": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml",
-      "sha256": "d97c580ab2400cb59ee2ad0bef2ae1239e1dfec38f7b964e2254a64dbe07ba30",
-      "path": "../shared/d97c580ab2400cb59ee2ad0bef2ae1239e1dfec38f7b964e2254a64dbe07ba30.yaml"
+      "sha256": "03cb3fc1c0be04cc6c01c6360aff762b2dddb95045c5b0e1df93eb40e6be5304",
+      "path": "../shared/03cb3fc1c0be04cc6c01c6360aff762b2dddb95045c5b0e1df93eb40e6be5304.yaml"
     },
     "logger_used.py": {
       "source": "/home/oleksandr/ros2_ws/install/smart_radiation/lib/python3.12/site-packages/smart_radiation/radiation_run_logger.py",
@@ -96,8 +96,8 @@
     {
       "node": "/controller_server",
       "status": "captured",
-      "file": "../shared/1aad363e6d74c84038edd03f8a65824267bb18d3368a5bbf42d50a4118f05633.yaml",
-      "sha256": "1aad363e6d74c84038edd03f8a65824267bb18d3368a5bbf42d50a4118f05633"
+      "file": "../shared/256a444e76421060543123593e5c353ad0f93a17840210d539be13564577190e.yaml",
+      "sha256": "256a444e76421060543123593e5c353ad0f93a17840210d539be13564577190e"
     },
     {
       "node": "/global_costmap/global_costmap",
@@ -108,8 +108,8 @@
     {
       "node": "/local_costmap/local_costmap",
       "status": "captured",
-      "file": "../shared/788928b44f893d4a45e3cb84be46c0ce65d90b43cb7291714d80390123dc4969.yaml",
-      "sha256": "788928b44f893d4a45e3cb84be46c0ce65d90b43cb7291714d80390123dc4969"
+      "file": "../shared/0c8742120368dcf881c5a92d9a9a4d770b9ce343918724cabd5a787ec7adf7ad.yaml",
+      "sha256": "0c8742120368dcf881c5a92d9a9a4d770b9ce343918724cabd5a787ec7adf7ad"
     },
     {
       "node": "/velocity_smoother",
@@ -126,10 +126,10 @@
   ],
   "state": "finished",
   "measured_start": [
-    5.000414895390239,
-    5.006593504222674,
-    0.030395400584852333
+    4.9842649407639135,
+    5.048116818014311,
+    -0.05067307738808232
   ],
-  "start_ros_s": 552.666,
+  "start_ros_s": 659.993,
   "result": "operator_success"
 }

@@ -8,88 +8,88 @@
     "component_container_mt"
   ],
   "errors": [],
-  "host_cpu_mean_percent": 87.37391304347825,
+  "host_cpu_mean_percent": 88.8913043478261,
   "processes": [
     {
-      "pid": 32253,
-      "created": 1791122031.23,
+      "pid": 55353,
+      "created": 1791131900.26,
       "label": "radiation_field_server",
       "samples": 23,
-      "cpu_mean_percent": 1.2,
+      "cpu_mean_percent": 1.2043478260869567,
       "cpu_p95_percent": 1.6,
-      "rss_peak_MiB": 126.5078125
+      "rss_peak_MiB": 126.9453125
     },
     {
-      "pid": 32254,
-      "created": 1791122031.23,
+      "pid": 55356,
+      "created": 1791131900.27,
       "label": "radiation_mapper",
       "samples": 23,
-      "cpu_mean_percent": 0.7347826086956522,
-      "cpu_p95_percent": 1.3699999999999994,
-      "rss_peak_MiB": 67.05078125
+      "cpu_mean_percent": 0.726086956521739,
+      "cpu_p95_percent": 1.1,
+      "rss_peak_MiB": 65.98828125
     },
     {
-      "pid": 32255,
-      "created": 1791122031.24,
+      "pid": 55357,
+      "created": 1791131900.27,
       "label": "virtual_geiger",
       "samples": 23,
-      "cpu_mean_percent": 85.62608695652175,
-      "cpu_p95_percent": 88.88000000000001,
-      "rss_peak_MiB": 72.78515625
+      "cpu_mean_percent": 84.10434782608696,
+      "cpu_p95_percent": 86.68,
+      "rss_peak_MiB": 72.69921875
     },
     {
-      "pid": 33146,
-      "created": 1791122055.02,
+      "pid": 56090,
+      "created": 1791131914.6,
       "label": "controller_server",
       "samples": 23,
-      "cpu_mean_percent": 24.01304347826087,
-      "cpu_p95_percent": 25.799999999999997,
-      "rss_peak_MiB": 50.6640625
+      "cpu_mean_percent": 23.64782608695652,
+      "cpu_p95_percent": 25.099999999999998,
+      "rss_peak_MiB": 46.5703125
     },
     {
-      "pid": 33148,
-      "created": 1791122055.03,
+      "pid": 56092,
+      "created": 1791131914.6,
       "label": "planner_server",
       "samples": 23,
-      "cpu_mean_percent": 32.895652173913035,
-      "cpu_p95_percent": 49.07999999999999,
-      "rss_peak_MiB": 70.765625
+      "cpu_mean_percent": 33.513043478260876,
+      "cpu_p95_percent": 50.66,
+      "rss_peak_MiB": 69.484375
     },
     {
-      "pid": 33151,
-      "created": 1791122055.03,
+      "pid": 56095,
+      "created": 1791131914.6,
       "label": "bt_navigator",
       "samples": 23,
-      "cpu_mean_percent": 25.821739130434782,
-      "cpu_p95_percent": 26.79,
-      "rss_peak_MiB": 58.265625
+      "cpu_mean_percent": 26.42173913043478,
+      "cpu_p95_percent": 27.47,
+      "rss_peak_MiB": 58.66796875
     },
     {
-      "pid": 33153,
-      "created": 1791122055.04,
+      "pid": 56097,
+      "created": 1791131914.61,
       "label": "velocity_smoother",
       "samples": 23,
-      "cpu_mean_percent": 11.682608695652174,
-      "cpu_p95_percent": 12.280000000000001,
-      "rss_peak_MiB": 27.578125
+      "cpu_mean_percent": 11.917391304347825,
+      "cpu_p95_percent": 12.5,
+      "rss_peak_MiB": 27.796875
     },
     {
-      "pid": 33154,
-      "created": 1791122055.04,
+      "pid": 56098,
+      "created": 1791131914.61,
       "label": "collision_monitor",
       "samples": 23,
-      "cpu_mean_percent": 12.417391304347827,
+      "cpu_mean_percent": 12.473913043478262,
       "cpu_p95_percent": 13.09,
-      "rss_peak_MiB": 37.32421875
+      "rss_peak_MiB": 37.18359375
     },
     {
-      "pid": 35733,
-      "created": 1791122726.41,
+      "pid": 59796,
+      "created": 1791132752.17,
       "label": "logger_self",
       "samples": 23,
-      "cpu_mean_percent": 95.56956521739129,
-      "cpu_p95_percent": 98.13,
-      "rss_peak_MiB": 77.8515625
+      "cpu_mean_percent": 94.36956521739133,
+      "cpu_p95_percent": 96.85000000000001,
+      "rss_peak_MiB": 78.171875
     }
   ],
   "note": "RSS is per process, shared pages may be counted repeatedly; p95 is descriptive, not a confidence interval. No controller latency measured."

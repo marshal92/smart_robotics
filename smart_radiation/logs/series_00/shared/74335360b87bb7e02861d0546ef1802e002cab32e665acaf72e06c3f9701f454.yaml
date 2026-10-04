@@ -1,0 +1,6 @@
+/radiation_field_server:
+  ros__parameters:
+    is_active: true
+    map_path: radiation_map_complex.npy
+    start_type_description_service: true
+    use_sim_time: false

@@ -8,88 +8,88 @@
     "component_container_mt"
   ],
   "errors": [],
-  "host_cpu_mean_percent": 88.17307692307692,
+  "host_cpu_mean_percent": 88.60833333333333,
   "processes": [
     {
-      "pid": 32253,
-      "created": 1791122031.23,
+      "pid": 55353,
+      "created": 1791131900.26,
       "label": "radiation_field_server",
-      "samples": 26,
-      "cpu_mean_percent": 1.2,
-      "cpu_p95_percent": 1.675,
-      "rss_peak_MiB": 126.5078125
+      "samples": 24,
+      "cpu_mean_percent": 1.2249999999999999,
+      "cpu_p95_percent": 1.5,
+      "rss_peak_MiB": 126.94921875
     },
     {
-      "pid": 32254,
-      "created": 1791122031.23,
+      "pid": 55356,
+      "created": 1791131900.27,
       "label": "radiation_mapper",
-      "samples": 26,
-      "cpu_mean_percent": 0.7153846153846154,
-      "cpu_p95_percent": 1.475,
-      "rss_peak_MiB": 67.05078125
+      "samples": 24,
+      "cpu_mean_percent": 0.7583333333333334,
+      "cpu_p95_percent": 1.1,
+      "rss_peak_MiB": 66.87109375
     },
     {
-      "pid": 32255,
-      "created": 1791122031.24,
+      "pid": 55357,
+      "created": 1791131900.27,
       "label": "virtual_geiger",
-      "samples": 26,
-      "cpu_mean_percent": 84.65,
-      "cpu_p95_percent": 88.02499999999999,
-      "rss_peak_MiB": 72.78515625
+      "samples": 24,
+      "cpu_mean_percent": 84.71249999999999,
+      "cpu_p95_percent": 87.77,
+      "rss_peak_MiB": 72.69921875
     },
     {
-      "pid": 33146,
-      "created": 1791122055.02,
+      "pid": 56090,
+      "created": 1791131914.6,
       "label": "controller_server",
-      "samples": 26,
-      "cpu_mean_percent": 23.81153846153846,
-      "cpu_p95_percent": 24.3,
-      "rss_peak_MiB": 50.67578125
+      "samples": 24,
+      "cpu_mean_percent": 23.712500000000002,
+      "cpu_p95_percent": 25.234999999999996,
+      "rss_peak_MiB": 46.5703125
     },
     {
-      "pid": 33148,
-      "created": 1791122055.03,
+      "pid": 56092,
+      "created": 1791131914.6,
       "label": "planner_server",
-      "samples": 26,
-      "cpu_mean_percent": 32.11153846153846,
-      "cpu_p95_percent": 48.775,
-      "rss_peak_MiB": 70.91796875
+      "samples": 24,
+      "cpu_mean_percent": 33.425,
+      "cpu_p95_percent": 50.18499999999999,
+      "rss_peak_MiB": 69.9921875
     },
     {
-      "pid": 33151,
-      "created": 1791122055.03,
+      "pid": 56095,
+      "created": 1791131914.6,
       "label": "bt_navigator",
-      "samples": 26,
-      "cpu_mean_percent": 25.369230769230764,
-      "cpu_p95_percent": 26.75,
-      "rss_peak_MiB": 58.27734375
+      "samples": 24,
+      "cpu_mean_percent": 26.245833333333337,
+      "cpu_p95_percent": 27.485,
+      "rss_peak_MiB": 58.66796875
     },
     {
-      "pid": 33153,
-      "created": 1791122055.04,
+      "pid": 56097,
+      "created": 1791131914.61,
       "label": "velocity_smoother",
-      "samples": 26,
-      "cpu_mean_percent": 11.534615384615385,
-      "cpu_p95_percent": 12.075,
-      "rss_peak_MiB": 27.62890625
+      "samples": 24,
+      "cpu_mean_percent": 11.904166666666669,
+      "cpu_p95_percent": 12.669999999999998,
+      "rss_peak_MiB": 27.796875
     },
     {
-      "pid": 33154,
-      "created": 1791122055.04,
+      "pid": 56098,
+      "created": 1791131914.61,
       "label": "collision_monitor",
-      "samples": 26,
-      "cpu_mean_percent": 12.373076923076923,
-      "cpu_p95_percent": 12.875,
-      "rss_peak_MiB": 37.34375
+      "samples": 24,
+      "cpu_mean_percent": 12.5,
+      "cpu_p95_percent": 13.1,
+      "rss_peak_MiB": 37.1953125
     },
     {
-      "pid": 36062,
-      "created": 1791122812.58,
+      "pid": 60144,
+      "created": 1791132856.6,
       "label": "logger_self",
-      "samples": 26,
-      "cpu_mean_percent": 94.32692307692308,
-      "cpu_p95_percent": 97.475,
-      "rss_peak_MiB": 79.25
+      "samples": 24,
+      "cpu_mean_percent": 95.00833333333333,
+      "cpu_p95_percent": 97.255,
+      "rss_peak_MiB": 78.328125
     }
   ],
   "note": "RSS is per process, shared pages may be counted repeatedly; p95 is descriptive, not a confidence interval. No controller latency measured."
