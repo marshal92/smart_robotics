@@ -1,6 +1,6 @@
 {
   "logger_version": 2,
-  "created_utc": "2026-09-30T20:25:24.664117+00:00",
+  "created_utc": "2026-10-04T13:54:40.971362+00:00",
   "arguments": {
     "self_test": false,
     "session": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/config/experiment.yaml",
@@ -20,14 +20,14 @@
     ],
     "field": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy",
     "meta": null,
-    "unit": "uSv/h",
+    "unit": "mSv/h",
     "nav_config": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml",
     "method": "proposed",
     "route": "R1",
     "goal": [
-      6.0,
-      22.0,
-      0.0
+      11.5,
+      28.0,
+      1.57
     ],
     "output": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/logs/series_01/R1_proposed_01",
     "notes": "reflex=off; записать состояние GUI/видеозаписи и оборудование; ВПИСАТЬ фактические D_noise, D_crit, k, cap",
@@ -77,13 +77,13 @@
     },
     "nav2_input.yaml": {
       "source": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml",
-      "sha256": "36163807a8e5e0ce93904a90ca69c9d53ebeb1361912eb401f407c61d83cfb12",
-      "path": "../shared/36163807a8e5e0ce93904a90ca69c9d53ebeb1361912eb401f407c61d83cfb12.yaml"
+      "sha256": "d97c580ab2400cb59ee2ad0bef2ae1239e1dfec38f7b964e2254a64dbe07ba30",
+      "path": "../shared/d97c580ab2400cb59ee2ad0bef2ae1239e1dfec38f7b964e2254a64dbe07ba30.yaml"
     },
     "logger_used.py": {
       "source": "/home/oleksandr/ros2_ws/install/smart_radiation/lib/python3.12/site-packages/smart_radiation/radiation_run_logger.py",
-      "sha256": "949f4022be461905c977e1fa417fe3c091377d8ec325dc6b75c79dfb7ebbf583",
-      "path": "../shared/949f4022be461905c977e1fa417fe3c091377d8ec325dc6b75c79dfb7ebbf583.py"
+      "sha256": "b0c0cf387b683c652f3f3c39d067f814b3b6842029020e5f467a05fd9c0afcd8",
+      "path": "../shared/b0c0cf387b683c652f3f3c39d067f814b3b6842029020e5f467a05fd9c0afcd8.py"
     }
   },
   "parameter_snapshots": [
@@ -96,8 +96,8 @@
     {
       "node": "/controller_server",
       "status": "captured",
-      "file": "../shared/2b0532483b166ba5084af3c9ad0cd18221b13573e04d5e6bc74716880927dd9c.yaml",
-      "sha256": "2b0532483b166ba5084af3c9ad0cd18221b13573e04d5e6bc74716880927dd9c"
+      "file": "../shared/e82c6712c74318392d04430ec0911519deb879269d4fd81cb3141d3cb404463c.yaml",
+      "sha256": "e82c6712c74318392d04430ec0911519deb879269d4fd81cb3141d3cb404463c"
     },
     {
       "node": "/global_costmap/global_costmap",
@@ -108,28 +108,28 @@
     {
       "node": "/local_costmap/local_costmap",
       "status": "captured",
-      "file": "../shared/4c3ee589efa0a715481cd69c009657a13eba1f4910c1c4146f2b93e3d32e3ad0.yaml",
-      "sha256": "4c3ee589efa0a715481cd69c009657a13eba1f4910c1c4146f2b93e3d32e3ad0"
+      "file": "../shared/788928b44f893d4a45e3cb84be46c0ce65d90b43cb7291714d80390123dc4969.yaml",
+      "sha256": "788928b44f893d4a45e3cb84be46c0ce65d90b43cb7291714d80390123dc4969"
     },
     {
       "node": "/velocity_smoother",
       "status": "captured",
-      "file": "../shared/91d4380e0c7e09169380259d6a6463d1c41478416325beb5b88f11b098526e90.yaml",
-      "sha256": "91d4380e0c7e09169380259d6a6463d1c41478416325beb5b88f11b098526e90"
+      "file": "../shared/abd214fd5c223863f0240035582cca8c61deb7c274758cc2dbcd14b22001bde0.yaml",
+      "sha256": "abd214fd5c223863f0240035582cca8c61deb7c274758cc2dbcd14b22001bde0"
     },
     {
       "node": "/radiation_field_server",
       "status": "captured",
-      "file": "../shared/43e0cd66a14de1933503483b6d4f11caf3ddb8cce41ff63f92a493f0b3f657ee.yaml",
-      "sha256": "43e0cd66a14de1933503483b6d4f11caf3ddb8cce41ff63f92a493f0b3f657ee"
+      "file": "../shared/74335360b87bb7e02861d0546ef1802e002cab32e665acaf72e06c3f9701f454.yaml",
+      "sha256": "74335360b87bb7e02861d0546ef1802e002cab32e665acaf72e06c3f9701f454"
     }
   ],
   "state": "finished",
   "measured_start": [
-    5.60914125098149e-17,
-    -5.551236569294583e-17,
-    -0.0002076308473935031
+    11.513923086384045,
+    1.4358717561207195,
+    1.6142563371137557
   ],
-  "start_ros_s": 86.245,
+  "start_ros_s": 68.437,
   "result": "operator_success"
 }

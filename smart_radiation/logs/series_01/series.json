@@ -2,7 +2,7 @@
   "settings": {
     "output_root": "~/ros2_ws/src/smart_robotics/smart_radiation/logs/series_01",
     "field": "~/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy",
-    "unit": "uSv/h",
+    "unit": "mSv/h",
     "frame": "map",
     "robot_frame": "base_footprint",
     "plan_topic": "/plan",
@@ -32,7 +32,7 @@
         "monitor_names": [
           "baseline_field_server"
         ],
-        "notes": "threshold=500; occupancy_cost=87; подтвердить рабочие значения",
+        "notes": "threshold=1000; occupancy_cost=95; подтвердить рабочие значения",
         "attach": []
       },
       "proposed": {
@@ -50,38 +50,38 @@
     "routes": {
       "R1": {
         "planned_start": [
-          0.0,
-          0.0,
-          0.0
+          11.5,
+          1.5,
+          1.57
         ],
         "goal": [
-          6.0,
-          22.0,
-          0.0
+          11.5,
+          28.0,
+          1.57
         ]
       },
       "R2": {
         "planned_start": [
-          0.0,
-          0.0,
+          5.0,
+          5.0,
           0.0
         ],
         "goal": [
-          6.0,
-          22.0,
-          0.0
+          5.0,
+          26.0,
+          1.57
         ]
       },
       "R3": {
         "planned_start": [
-          0.0,
-          0.0,
-          0.0
+          7.5,
+          11.5,
+          1.57
         ],
         "goal": [
-          6.0,
-          22.0,
-          0.0
+          11.0,
+          28.0,
+          1.57
         ]
       }
     }
@@ -89,7 +89,7 @@
   "sha256": {
     "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy": "d6c62801d1fa8d62c2cdfe56eec954ae62d6b822f5d8b5c2adc68f78013d8b5a",
     "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex_meta.json": "221d7ecbe5ef2ef8c2cfb42f8bcdc67f5106c684682dc28044347d7c02568d5e",
-    "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml": "825f0a9961874626a1fa49916b9e81cc9f08f7460eeead8d68ffcda7aa1068db",
-    "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml": "36163807a8e5e0ce93904a90ca69c9d53ebeb1361912eb401f407c61d83cfb12"
+    "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml": "49a8ae3cbb138ac849db533a5762ad32d78b20d64a7500563f7f7b5c022565c0",
+    "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml": "d97c580ab2400cb59ee2ad0bef2ae1239e1dfec38f7b964e2254a64dbe07ba30"
   }
 }

@@ -1,6 +1,6 @@
 {
   "logger_version": 2,
-  "created_utc": "2026-09-30T20:03:19.973557+00:00",
+  "created_utc": "2026-10-04T14:16:42.705438+00:00",
   "arguments": {
     "self_test": false,
     "session": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/config/experiment.yaml",
@@ -20,17 +20,17 @@
     ],
     "field": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps/radiation_map_complex.npy",
     "meta": null,
-    "unit": "uSv/h",
+    "unit": "mSv/h",
     "nav_config": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml",
     "method": "baseline",
     "route": "R1",
     "goal": [
-      6.0,
-      22.0,
-      0.0
+      11.5,
+      28.0,
+      1.57
     ],
     "output": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/logs/series_01/R1_baseline_01",
-    "notes": "reflex=off; записать состояние GUI/видеозаписи и оборудование; threshold=500; occupancy_cost=87; подтвердить рабочие значения",
+    "notes": "reflex=off; записать состояние GUI/видеозаписи и оборудование; threshold=1000; occupancy_cost=95; подтвердить рабочие значения",
     "attach": [],
     "revision": "v1.0",
     "capture_node": [
@@ -77,13 +77,13 @@
     },
     "nav2_input.yaml": {
       "source": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml",
-      "sha256": "825f0a9961874626a1fa49916b9e81cc9f08f7460eeead8d68ffcda7aa1068db",
-      "path": "../shared/825f0a9961874626a1fa49916b9e81cc9f08f7460eeead8d68ffcda7aa1068db.yaml"
+      "sha256": "49a8ae3cbb138ac849db533a5762ad32d78b20d64a7500563f7f7b5c022565c0",
+      "path": "../shared/49a8ae3cbb138ac849db533a5762ad32d78b20d64a7500563f7f7b5c022565c0.yaml"
     },
     "logger_used.py": {
       "source": "/home/oleksandr/ros2_ws/install/smart_radiation/lib/python3.12/site-packages/smart_radiation/radiation_run_logger.py",
-      "sha256": "949f4022be461905c977e1fa417fe3c091377d8ec325dc6b75c79dfb7ebbf583",
-      "path": "../shared/949f4022be461905c977e1fa417fe3c091377d8ec325dc6b75c79dfb7ebbf583.py"
+      "sha256": "b0c0cf387b683c652f3f3c39d067f814b3b6842029020e5f467a05fd9c0afcd8",
+      "path": "../shared/b0c0cf387b683c652f3f3c39d067f814b3b6842029020e5f467a05fd9c0afcd8.py"
     }
   },
   "parameter_snapshots": [
@@ -96,8 +96,8 @@
     {
       "node": "/controller_server",
       "status": "captured",
-      "file": "../shared/2b0532483b166ba5084af3c9ad0cd18221b13573e04d5e6bc74716880927dd9c.yaml",
-      "sha256": "2b0532483b166ba5084af3c9ad0cd18221b13573e04d5e6bc74716880927dd9c"
+      "file": "../shared/256a444e76421060543123593e5c353ad0f93a17840210d539be13564577190e.yaml",
+      "sha256": "256a444e76421060543123593e5c353ad0f93a17840210d539be13564577190e"
     },
     {
       "node": "/global_costmap/global_costmap",
@@ -108,28 +108,28 @@
     {
       "node": "/local_costmap/local_costmap",
       "status": "captured",
-      "file": "../shared/10f52725aeb5d967a50a2a3c7cf85b7b3cf5947c7dea1aa5f876c979f9132b5e.yaml",
-      "sha256": "10f52725aeb5d967a50a2a3c7cf85b7b3cf5947c7dea1aa5f876c979f9132b5e"
+      "file": "../shared/0c8742120368dcf881c5a92d9a9a4d770b9ce343918724cabd5a787ec7adf7ad.yaml",
+      "sha256": "0c8742120368dcf881c5a92d9a9a4d770b9ce343918724cabd5a787ec7adf7ad"
     },
     {
       "node": "/velocity_smoother",
       "status": "captured",
-      "file": "../shared/91d4380e0c7e09169380259d6a6463d1c41478416325beb5b88f11b098526e90.yaml",
-      "sha256": "91d4380e0c7e09169380259d6a6463d1c41478416325beb5b88f11b098526e90"
+      "file": "../shared/abd214fd5c223863f0240035582cca8c61deb7c274758cc2dbcd14b22001bde0.yaml",
+      "sha256": "abd214fd5c223863f0240035582cca8c61deb7c274758cc2dbcd14b22001bde0"
     },
     {
       "node": "/radiation_field_server",
       "status": "captured",
-      "file": "../shared/b5c1718e93123433f944e6ae6101b2eecac4371ae636a9adca304d1d7bf2d60e.yaml",
-      "sha256": "b5c1718e93123433f944e6ae6101b2eecac4371ae636a9adca304d1d7bf2d60e"
+      "file": "../shared/82c80ccbf86dc1940aca03b3d7197e62f0d811b7c2de681384275229a5177f32.yaml",
+      "sha256": "82c80ccbf86dc1940aca03b3d7197e62f0d811b7c2de681384275229a5177f32"
     }
   ],
   "state": "finished",
   "measured_start": [
-    9.090471335936453e-17,
-    -5.550349243715193e-17,
-    0.0007000370657395116
+    11.472265178052995,
+    1.4771914139098672,
+    1.5153316949968025
   ],
-  "start_ros_s": 318.539,
+  "start_ros_s": 124.221,
   "result": "operator_success"
 }

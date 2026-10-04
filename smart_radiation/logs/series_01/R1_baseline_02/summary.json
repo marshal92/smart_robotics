@@ -1,0 +1,15 @@
+{
+  "result": "operator_success",
+  "duration_ros_s": 49.184,
+  "duration_wall_s": 54.68059435000032,
+  "exposure_valid_uSv": 5511.696701643192,
+  "path_valid_m": 26.519206941836163,
+  "covered_s": 49.079999999999984,
+  "coverage_fraction": 0.9978854912166556,
+  "bad_rows": 0,
+  "interval_breaks": 0,
+  "rows": 492,
+  "resources_file": "resources_summary.json",
+  "resource_errors": [],
+  "note": "Valid-interval estimate only. Inspect gaps, TF quality, boundaries and field alignment; no automatic Nav2 success verification."
+}
