@@ -76,6 +76,10 @@ export class SimpleTFClient {
       this.tfSub.unsubscribe()
       this.tfSub = null
     }
+    if (this.tfStaticSub) {
+      this.tfStaticSub.unsubscribe()
+      this.tfStaticSub = null
+    }
     this.callbacks = {}
   }
 

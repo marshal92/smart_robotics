@@ -18,16 +18,24 @@
         <input type="number" v-model.number="form.yaw" step="0.1" style="width: 70px;" />
       </div>
       
-      <button class="btn-action" style="background: var(--accent);" @click="addSinglePoint">Point</button>
-      <button class="btn-action" style="background: #555;" @click="addToQueue">Waypoints</button>
+      <button class="unified-btn c-blue" @click="addSinglePoint">
+        <div class="waypoint-name">Save Point</div>
+      </button>
+      <button class="unified-btn c-gray" @click="addToQueue">
+        <div class="waypoint-name">Add to Route</div>
+      </button>
     </div>
     
     <div v-if="store.routeQueue.length > 0" class="route-ui">
       <span style="color:var(--text); opacity:0.8; font-size:13px; margin-right: 15px;">
         Points in route: <span style="color:var(--accent); opacity:1; font-weight:bold;">{{ store.routeQueue.length }}</span>
       </span>
-      <button class="btn-action" style="background: #7b1fa2; padding:5px 10px; font-size:12px; height: auto;" @click="saveRoute">Save as Route</button>
-      <button class="btn-action" style="background: transparent; border:1px solid var(--red); color:var(--red); padding:5px 10px; font-size:12px; height: auto; margin-left: 10px;" @click="store.clearRouteQueue">Reset</button>
+      <button class="unified-btn c-purple" style="width: auto; padding: 0 10px;" @click="saveRoute">
+        <div class="waypoint-name">Save Route</div>
+      </button>
+      <button class="unified-btn" style="background: transparent; border: 1px solid var(--red); color: var(--red); width: auto; padding: 0 10px; margin-left: 10px;" @click="store.clearRouteQueue">
+        <div class="waypoint-name">Reset</div>
+      </button>
     </div>
   </div>
 </template>

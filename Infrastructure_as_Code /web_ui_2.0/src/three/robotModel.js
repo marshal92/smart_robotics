@@ -66,9 +66,15 @@ export function createURDFRobot(ros, viewer, tfClient) {
               
               // Base chassis is light blue, everything else (manipulator/lidar) is dark blue
               const isChassis = finalPath.toLowerCase().includes('base.stl')
-              const selectedMaterial = isChassis ? lightBlueMaterial : darkBlueMaterial
+              const isLidar = finalPath.toLowerCase().includes('lidar') || finalPath.toLowerCase().includes('laser') || finalPath.toLowerCase().includes('velodyne')
               
+              const selectedMaterial = isChassis ? darkBlueMaterial : lightBlueMaterial
               const mesh = new THREE.Mesh(geometry, selectedMaterial)
+              
+              if (isLidar) {
+                mesh.visible = false
+              }
+              
               mesh.castShadow = true
               mesh.receiveShadow = true
               done(mesh)
@@ -86,8 +92,11 @@ export function createURDFRobot(ros, viewer, tfClient) {
       
       // Override materials for synchronous primitive shapes (boxes, cylinders in URDF)
       urdfRobot.traverse((child) => {
+        if (child.name && (child.name.toLowerCase().includes('lidar') || child.name.toLowerCase().includes('laser') || child.name.toLowerCase().includes('velodyne'))) {
+          child.visible = false
+        }
         if (child.isMesh) {
-          child.material = darkBlueMaterial
+          child.material = lightBlueMaterial
           child.castShadow = true
           child.receiveShadow = true
         }
@@ -103,8 +112,13 @@ export function createURDFRobot(ros, viewer, tfClient) {
         messageType: 'sensor_msgs/msg/JointState'
       })
 
+      let lastRenderUpdate = 0
       jointSub.subscribe((msg) => {
         if (!urdfRobot) return
+        const now = performance.now()
+        if (now - lastRenderUpdate < 33) return // ~30Hz max
+        lastRenderUpdate = now
+        
         for (let i = 0; i < msg.name.length; i++) {
           const jointName = msg.name[i]
           const jointAngle = msg.position[i]

@@ -342,7 +342,7 @@ def record(args):
     from rclpy.time import Time
     from tf2_ros import Buffer, TransformListener, TransformException
     from std_srvs.srv import Trigger, SetBool
-    from nav_msgs.msg import Path as NavPath
+    from nav_msgs.msg import Path as NavPath, Odometry
     import psutil  # fail before creating a run if monitoring dependency is missing
 
     field, meta, out, passport = prepare(args)
@@ -364,13 +364,16 @@ def record(args):
             self.csvf = open(out / 'samples.csv', 'w', newline='', buffering=1)
             self.writer = csv.writer(self.csvf)
             self.writer.writerow(['t_ros_s','t_elapsed_s','tf_stamp_s','tf_age_s',
-                                  'x_map_m','y_map_m','yaw_rad','dose_rate_uSv_h',
+                                  'x_map_m','y_map_m','yaw_rad','v_m_s','w_rad_s','dose_rate_uSv_h',
                                   'exposure_valid_uSv','path_valid_m','covered_s','status'])
             self.eventf = open(out / 'events.jsonl', 'w', buffering=1)
             self.pathf = open(out / 'plans.jsonl', 'w', buffering=1)
             self.start_srv = self.create_service(Trigger, '~/start', self.start)
             self.end_srv = self.create_service(SetBool, '~/finish', self.finish)
             self.path_sub = self.create_subscription(NavPath, args.plan_topic, self.plan, 10)
+            self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom, 10)
+            self.latest_v = 0.0
+            self.latest_w = 0.0
             self.timer = self.create_timer(1./args.hz, self.tick)
             self.get_logger().info(f'READY: {out}. Waiting for /radiation_run_logger/start')
 
@@ -432,6 +435,10 @@ def record(args):
                 'stamp_s':msg.header.stamp.sec+msg.header.stamp.nanosec/1e9,
                 'xy':[[p.pose.position.x,p.pose.position.y] for p in msg.poses]})+'\n')
 
+        def odom(self, msg):
+            self.latest_v = msg.twist.twist.linear.x
+            self.latest_w = msg.twist.twist.angular.z
+
         def tick(self):
             if not self.active:
                 return
@@ -453,12 +460,12 @@ def record(args):
                     return
                 status = self.integral.push(stamp,x,y,dose)
                 row = [now,now-self.start_ros,stamp,age,x,y,yaw,
-                       '' if dose is None else dose]
+                       self.latest_v,self.latest_w,'' if dose is None else dose]
             except (TransformException, ValueError) as e:
                 self.integral.prev = None
                 status = 'invalid_TF'
                 self.event(status, detail=str(e))
-                row = [now,now-self.start_ros,'','','','','','']
+                row = [now,now-self.start_ros,'','','','','','','','']
             if status not in ('ok','first_sample'):
                 self.bad += 1
             self.rows += 1

@@ -2,6 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
+from map_msgs.msg import OccupancyGridUpdate
 from sensor_msgs.msg import CompressedImage
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy
@@ -16,8 +17,8 @@ class BaselineFieldServer(Node):
         super().__init__('baseline_field_server')
 
         self.declare_parameter('map_path', 'radiation_map_complex.npy')
-        self.declare_parameter('radiation_threshold', 500.0)
-        self.declare_parameter('radiation_cost', 87) # 87 in OccupancyGrid -> ~220 in Nav2 Costmap (with trinary_costmap: false)
+        self.declare_parameter('radiation_threshold', 1000.0)
+        self.declare_parameter('radiation_cost', 95) # 95 -> ~241 in Costmap (high penalty, but not a solid wall)
         self.declare_parameter('is_active', False)
         
         self.map_path_param = self.get_parameter('map_path').value
@@ -38,6 +39,7 @@ class BaselineFieldServer(Node):
         map_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.map_sub = self.create_subscription(OccupancyGrid, '/map', self.map_callback, map_qos)
         self.baseline_pub = self.create_publisher(OccupancyGrid, '/baseline_map', map_qos)
+        self.baseline_update_pub = self.create_publisher(OccupancyGridUpdate, '/baseline_map_updates', 10)
         self.image_pub = self.create_publisher(CompressedImage, '/radiation_image/compressed', map_qos)
         
         self.add_on_set_parameters_callback(self.param_callback)
@@ -166,11 +168,21 @@ class BaselineFieldServer(Node):
 
         baseline_msg = OccupancyGrid()
         baseline_msg.header = self.last_map_msg.header
-        baseline_msg.header.stamp = self.get_clock().now().to_msg()
+        baseline_msg.header.stamp = self.last_map_msg.header.stamp
         baseline_msg.info = self.last_map_msg.info
         baseline_msg.data = final_grid.flatten().tolist()
         
         self.baseline_pub.publish(baseline_msg)
+
+        update_msg = OccupancyGridUpdate()
+        update_msg.header = baseline_msg.header
+        update_msg.x = 0
+        update_msg.y = 0
+        update_msg.width = self.cached_width
+        update_msg.height = self.cached_height
+        update_msg.data = baseline_msg.data
+        
+        self.baseline_update_pub.publish(update_msg)
 
         # Web UI visualizer (normalize the cost to 255 for color mapping)
         heatmap_gray = (self.cached_100_grid * 255.0 / max(1, self.radiation_cost)).astype(np.uint8)
@@ -197,10 +209,38 @@ class BaselineFieldServer(Node):
             self.image_pub.publish(img_msg)
 
 def main(args=None):
-    rclpy.init(args=args)
+    if args is None:
+        import sys
+        args = sys.argv
+    clean_args = []
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == '--ros-args':
+            clean_args.append(arg)
+        elif arg == '-p' or arg == '--param':
+            clean_args.append(arg)
+        elif arg.startswith('use_sim_time:='):
+            if len(clean_args) > 0 and clean_args[-1] in ('-p', '--param'):
+                clean_args.pop()
+        elif arg == 'use_sim_time':
+            if len(clean_args) > 0 and clean_args[-1] in ('-p', '--param'):
+                clean_args.pop()
+            skip_next = True
+        else:
+            clean_args.append(arg)
+
+    rclpy.init(args=clean_args)
     node = BaselineFieldServer()
     try:
-        rclpy.spin(node)
+        import time
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.1)
+            time.sleep(0.05)
+    except KeyboardInterrupt:
+        pass
     finally:
         node.destroy_node()
         if rclpy.ok():

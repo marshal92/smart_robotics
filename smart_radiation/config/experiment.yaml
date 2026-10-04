@@ -33,7 +33,7 @@ methods:
     nav_config: ~/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params_baseline.yaml
     capture_nodes: [/radiation_field_server]
     monitor_names: [baseline_field_server]
-    notes: "threshold=500; occupancy_cost=87; подтвердить рабочие значения"
+    notes: "threshold=1000; occupancy_cost=95; подтвердить рабочие значения"
     attach: []  # Например: [/путь/baseline_field_server.py]
   proposed:
     nav_config: ~/ros2_ws/src/smart_robotics/smart_nav/config/nav2_params.yaml

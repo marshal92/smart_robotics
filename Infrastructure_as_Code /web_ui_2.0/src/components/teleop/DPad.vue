@@ -53,6 +53,11 @@ const padUp = () => {
 
 const handleKeyDown = (e) => {
   if (e.target.tagName === 'INPUT' || e.repeat) return
+  
+  if (!store.activeRobotType) {
+    store.setActiveRobotType('base')
+  }
+
   if (store.activeRobotType !== (props.isShadow ? 'shadow' : 'base')) return
 
   const key = e.key.toLowerCase()
@@ -71,6 +76,11 @@ const handleKeyDown = (e) => {
 
 const handleKeyUp = (e) => {
   if (e.target.tagName === 'INPUT') return
+  
+  if (!store.activeRobotType) {
+    store.setActiveRobotType('base')
+  }
+
   if (store.activeRobotType !== (props.isShadow ? 'shadow' : 'base')) return
 
   const key = e.key.toLowerCase()

@@ -49,6 +49,8 @@ import RosConsole from './components/console/RosConsole.vue'
 
 .right-panel {
   flex: 0 0 500px; /* fixed width, large enough so it doesn't jump */
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 1024px) {

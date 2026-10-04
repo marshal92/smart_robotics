@@ -6,6 +6,11 @@
     <!-- Fullscreen Button -->
     <button class="fullscreen-btn" @click="toggleFullscreen" title="Fullscreen">⛶</button>
     
+    <!-- Camera Overlay -->
+    <div v-if="showCam" class="cam-popup">
+      <CameraStream />
+    </div>
+    
     <!-- Bottom Control Panel -->
     <div class="dt-bottom-panel">
       
@@ -24,14 +29,30 @@
 
       <!-- Center/Right: Action Buttons -->
       <div class="dt-actions">
-        <!-- 3D World Toggle with Context Menu for Worlds -->
+        <!-- CAM Toggle -->
+        <button 
+          @click="showCam = !showCam"
+          :class="['dt-btn', showCam ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+        >
+          <span>CAM</span>
+        </button>
+
+        <!-- NAV Popup Toggle -->
+        <button 
+          @click="showNavPopup = !showNavPopup"
+          :class="['dt-btn', showNavPopup ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+        >
+          <span>NAV</span>
+        </button>
+
+        <!-- 3D World Toggle -->
         <div style="position: relative; display: inline-block;">
           <button 
             @click="toggle3DWorld"
             @contextmenu.prevent="showWorldMenu = !showWorldMenu"
             :class="['dt-btn', show3DWorld ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
           >
-            <span>3D View</span>
+            <span>3D</span>
           </button>
           
           <div v-if="showWorldMenu" class="world-menu">
@@ -39,6 +60,7 @@
             <div class="world-menu-item" @click="loadWorld('kitchen')">kitchen.sdf</div>
             <div class="world-menu-item" @click="loadWorld('shelter_zero')">shelter_zero.sdf</div>
             <div class="world-menu-item" @click="loadWorld('shelter_zero_empty')">shelter_zero_empty.sdf</div>
+            <div class="world-menu-item" @click="loadWorld('shelter_zero_map')">shelter_zero_map.sdf</div>
             <div class="world-menu-slider" style="padding: 10px; border-top: 1px solid #444;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; color: #ccc;">
                 <span>Opacity</span>
@@ -49,20 +71,20 @@
           </div>
         </div>
 
-        <!-- Radiation Toggle -->
-        <button 
-          @click="toggleRadiation"
-          :class="['dt-btn', showRadiation ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
-        >
-          <span>Radiation</span>
-        </button>
-
         <!-- Waypoints Toggle -->
         <button 
           @click="toggleWaypoints"
           :class="['dt-btn', showWaypoints ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
         >
-          <span>Waypoints</span>
+          <span>WP</span>
+        </button>
+
+        <!-- Radiation Toggle -->
+        <button 
+          @click="toggleRadiation"
+          :class="['dt-btn', showRadiation ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
+        >
+          <span>RAD</span>
         </button>
 
         <!-- Shadow Toggle -->
@@ -70,20 +92,19 @@
           @click="toggleShadow"
           :class="['dt-btn', showShadowRobot ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
         >
-          <span>Shadow</span>
+          <span>SHADOW</span>
         </button>
 
-        <!-- Speed Toggle with Context Menu -->
+        <!-- Speed Toggle -->
         <div style="position: relative; display: inline-block;">
           <button 
             @click="showSpeedMenu = !showSpeedMenu"
             :class="['dt-btn', showSpeedMenu ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
-            style="min-width: 65px;"
           >
-            <span>v: {{ maxSpeed.toFixed(1) }}</span>
+            <span>VEL</span>
           </button>
           
-          <div v-if="showSpeedMenu" class="world-menu" style="bottom: 110%;">
+          <div v-if="showSpeedMenu" class="world-menu" style="bottom: 110%; right: 0;">
             <div class="world-menu-slider" style="padding: 10px;">
               <div style="display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; color: #ccc;">
                 <span>Max Speed</span>
@@ -108,11 +129,14 @@
           @click="toggleNavMode"
           :class="['dt-btn', isNavMode ? 'dt-btn-active-blue' : 'dt-btn-inactive']"
         >
-          <span>{{ isNavMode ? 'Click & Drag...' : 'Nav Goal' }}</span>
+          <span>GOAL</span>
         </button>
       </div>
 
     </div>
+
+    <!-- Nav Popup Overlay -->
+    <NavPopup v-if="showNavPopup" @close="showNavPopup = false" />
 
     <!-- Nav Mode Hint overlay -->
     <div v-if="isNavMode" class="dt-nav-hint">
@@ -124,7 +148,8 @@
 <script setup>
 import { onMounted, watch, ref, onBeforeUnmount } from 'vue'
 import { useRosStore } from '../../stores/rosStore'
-import { getRosInstance } from '../../services/rosConnection'
+import { getRosInstance, pubSmartCommand } from '../../services/rosConnection'
+import NavPopup from './NavPopup.vue'
 import * as ROSLIB from 'roslib'
 import * as THREE from 'three'
 import { STLLoader } from 'three/addons/loaders/STLLoader.js'
@@ -136,6 +161,7 @@ import { useMapLayer } from './composables/useMapLayer'
 import { useRadiationMap } from './composables/useRadiationMap'
 import { useWaypoints } from './composables/useWaypoints'
 import { useNavSpeed } from './composables/useNavSpeed'
+import CameraStream from '../teleop/CameraStream.vue'
 
 const store = useRosStore()
 const viewerInitialized = ref(false)
@@ -144,6 +170,8 @@ const isNavMode = ref(false)
 const showShadowRobot = ref(false)
 const showWorldMenu = ref(false)
 const showSpeedMenu = ref(false)
+const showNavPopup = ref(false)
+const showCam = ref(false)
 const wrapper = ref(null)
 const robotCoords = ref(null)
 
@@ -157,6 +185,14 @@ const toggleFullscreen = () => {
       document.exitFullscreen()
     }
   }
+}
+
+const goTo = (name) => {
+  pubSmartCommand('nav', 'go_to_named', { name })
+}
+
+const cancelNav = () => {
+  pubSmartCommand('nav', 'cancel', { x: 0, y: 0, yaw: 0 })
 }
 
 let viewer = null
@@ -670,7 +706,7 @@ onBeforeUnmount(() => {
   position: relative;
   width: 100%;
   flex-grow: 1;
-  min-height: 500px; /* Base height */
+  min-height: 600px; /* Base height + 20% */
   background-color: #111;
   border-radius: 8px;
   overflow: hidden;
@@ -833,5 +869,19 @@ onBeforeUnmount(() => {
 .world-menu-item:hover {
   background: var(--accent);
   color: white;
+}
+
+/* Cam Popup Styles */
+.cam-popup {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 480px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  z-index: 50;
+  border: 1px solid #444;
+  background: var(--panel-bg);
 }
 </style>

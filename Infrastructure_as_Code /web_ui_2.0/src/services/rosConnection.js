@@ -27,6 +27,11 @@ export const switchCameraTopic = (topicName) => {
   camSub.subscribe((msg) => store.updateCameraStream(msg.data))
 }
 
+let telemetrySub = null
+let fsmStatusSub = null
+let rosoutSub = null
+let wpListSub = null
+
 export function connectROS(url) {
   const store = useRosStore()
   
@@ -37,25 +42,29 @@ export function connectROS(url) {
     store.setConnectionStatus('Connected 🟢', true)
     
     // Publishers
-    smartCmdTopic = new ROSLIB.Topic({
-      ros: ros,
-      name: '/smart_command',
-      messageType: 'smart_interfaces/msg/SmartCommand'
-    })
-    
-    cmdVelTopic = new ROSLIB.Topic({ ros: ros, name: '/cmd_vel', messageType: 'geometry_msgs/msg/Twist' })
-    cmdShadowTopic = new ROSLIB.Topic({ ros: ros, name: '/cmd_vel_shadow', messageType: 'geometry_msgs/msg/Twist' })
-    cmdLightTopic = new ROSLIB.Topic({ ros: ros, name: '/cmd_light', messageType: 'std_msgs/msg/Bool' })
+    if (!smartCmdTopic) {
+      smartCmdTopic = new ROSLIB.Topic({ ros: ros, name: '/smart_command', messageType: 'smart_interfaces/msg/SmartCommand' })
+      cmdVelTopic = new ROSLIB.Topic({ ros: ros, name: '/cmd_vel', messageType: 'geometry_msgs/msg/Twist' })
+      cmdShadowTopic = new ROSLIB.Topic({ ros: ros, name: '/cmd_vel_shadow', messageType: 'geometry_msgs/msg/Twist' })
+      cmdLightTopic = new ROSLIB.Topic({ ros: ros, name: '/cmd_light', messageType: 'std_msgs/msg/Bool' })
+    } else {
+      smartCmdTopic.ros = ros
+      cmdVelTopic.ros = ros
+      cmdShadowTopic.ros = ros
+      cmdLightTopic.ros = ros
+    }
 
     // Subscribers
-    const telemetrySub = new ROSLIB.Topic({
+    if (telemetrySub) telemetrySub.unsubscribe()
+    telemetrySub = new ROSLIB.Topic({
       ros: ros,
       name: '/smart_telemetry',
       messageType: 'smart_interfaces/msg/SmartTelemetry'
     })
     telemetrySub.subscribe((msg) => store.updateTelemetry(msg))
 
-    const fsmStatusSub = new ROSLIB.Topic({
+    if (fsmStatusSub) fsmStatusSub.unsubscribe()
+    fsmStatusSub = new ROSLIB.Topic({
       ros: ros,
       name: '/fsm_status',
       messageType: 'std_msgs/msg/String'
@@ -64,14 +73,16 @@ export function connectROS(url) {
 
     switchCameraTopic('/camera/image_raw/compressed')
 
-    const rosoutSub = new ROSLIB.Topic({
+    if (rosoutSub) rosoutSub.unsubscribe()
+    rosoutSub = new ROSLIB.Topic({
       ros: ros,
       name: '/rosout',
       messageType: 'rcl_interfaces/msg/Log'
     })
     rosoutSub.subscribe((msg) => store.addLog(msg))
 
-    const wpListSub = new ROSLIB.Topic({
+    if (wpListSub) wpListSub.unsubscribe()
+    wpListSub = new ROSLIB.Topic({
       ros: ros,
       name: '/waypoints_list',
       messageType: 'std_msgs/msg/String'

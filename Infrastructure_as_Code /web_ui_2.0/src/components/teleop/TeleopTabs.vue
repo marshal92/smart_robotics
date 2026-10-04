@@ -1,8 +1,9 @@
 <template>
-  <div class="block-container">
+  <div class="block-container teleop-tabs-container">
     <div class="tabs">
       <button class="tab-btn" :class="{ active: activeTab === 'manager' }" @click="setTab('manager')">Manager</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'base' }" @click="setTab('base')">Direct Teleop</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'base' }" @click="setTab('base')">Teleop</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'arm' }" @click="setTab('arm')">Arm</button>
       <button class="tab-btn" :class="{ active: activeTab === 'radiation' }" @click="setTab('radiation')">Radiation</button>
     </div>
 
@@ -56,14 +57,19 @@
     <div v-show="activeTab === 'radiation'" class="tab-content active">
       <div class="mission-groups">
         <div class="mission-group">
-          <h4 class="group-title">Radiation Mapping</h4>
+          <h4 class="group-title">Mode</h4>
           <div class="small-grid">
             <button class="cmd-btn border-btn b-orange" @click="pubSys('rad_record:explored_map.npy')">Rad Record <span>explored_map.npy</span></button>
+            <button class="cmd-btn border-btn b-red" @click="pubSys('rad_clear')">Rad Clear <span>Clear memory</span></button>
+            <button class="cmd-btn border-btn b-blue" @click="pubSys('rad_save')">Rad Save <span>Save to disk</span></button>
+          </div>
+        </div>
+        <div class="mission-group">
+          <h4 class="group-title">Map</h4>
+          <div class="small-grid">
             <button class="cmd-btn border-btn b-blue" @click="pubSys('rad_load:radiation_map.npy')">Rad Load <span>radiation_map.npy</span></button>
             <button class="cmd-btn border-btn b-purple" @click="pubSys('rad_load:radiation_test_1.npy')">Rad Load Test <span>radiation_test_1.npy</span></button>
             <button class="cmd-btn border-btn b-purple" @click="pubSys('rad_load:radiation_map_complex.npy')">Rad Load Complex <span>radiation_map_complex.npy</span></button>
-            <button class="cmd-btn border-btn b-red" @click="pubSys('rad_clear')">Rad Clear <span>Clear memory</span></button>
-            <button class="cmd-btn border-btn b-blue" @click="pubSys('rad_save')">Rad Save <span>Save to disk</span></button>
           </div>
         </div>
       </div>
@@ -98,6 +104,11 @@
       </div>
     </div>
 
+    <!-- Tab 4: Arm -->
+    <div v-show="activeTab === 'arm'" class="tab-content active">
+      <ArmControl />
+    </div>
+
   </div>
 </template>
 
@@ -109,6 +120,7 @@ import { useRosStore } from '../../stores/rosStore'
 import CameraStream from './CameraStream.vue'
 import DPad from './DPad.vue'
 import SpeedSlider from './SpeedSlider.vue'
+import ArmControl from './ArmControl.vue'
 
 const store = useRosStore()
 const activeTab = ref('manager')
@@ -158,12 +170,20 @@ const stopBase = () => {
 </script>
 
 <style scoped>
+.teleop-tabs-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
 .tabs { display: flex; gap: 10px; margin-bottom: 15px; overflow-x: auto; padding-bottom: 5px;}
 .tab-btn { background: transparent; color: var(--text); border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: 0.2s; white-space: nowrap; opacity: 0.7; }
 .tab-btn.active { background: var(--accent); color: white; box-shadow: 0 0 8px rgba(25, 118, 210, 0.5); opacity: 1; }
 .tab-btn:hover:not(.active) { background: rgba(128, 128, 128, 0.1); opacity: 1; }
 .tab-content { 
-  min-height: 550px; 
+  min-height: 600px; 
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .mission-group { margin-bottom: 25px; }
@@ -179,22 +199,7 @@ const stopBase = () => {
   gap: 8px;
   align-items: center;
 }
-.compact-input { padding: 6px 10px !important; font-size: 12px !important; }
-.compact-btn { padding: 6px !important; font-size: 12px !important; min-height: 32px !important; }
-.map-input {
-  flex: 1;
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
-  color: var(--input-text);
-  padding: 10px 15px;
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s, background 0.3s, color 0.3s;
-}
-.map-input:focus {
-  border-color: var(--accent);
-}
+
 .small-btn {
   padding: 5px 15px !important;
   min-height: 40px !important;
@@ -215,14 +220,6 @@ const stopBase = () => {
   .compact-btn { width: auto; padding: 4px; font-size: 10px; }
 }
 
-/* Border Buttons for Tools & Safety */
-.border-btn { background: #555555 !important; color: white !important; border-bottom: 4px solid transparent; border-radius: 6px; transition: background 0.3s, color 0.3s; }
-.border-btn.b-green { border-bottom-color: #4caf50 !important; }
-.border-btn.b-red { border-bottom-color: #f44336 !important; }
-.border-btn.b-orange { border-bottom-color: #ff9800 !important; }
-.border-btn.b-gray { border-bottom-color: #9e9e9e !important; }
-.border-btn.b-blue { border-bottom-color: var(--accent) !important; }
-.border-btn.b-purple { border-bottom-color: #7b1fa2 !important; }
 
 .teleop-layout-vertical {
   display: flex;

@@ -252,7 +252,7 @@ class MissionManager(Node):
 
         legacy_dispatch = {
             'start_213':          lambda: threading.Thread(target=self._start_mission, args=("lifelong", "213_map"), daemon=True).start(),
-            'start_shelter_zero': lambda: threading.Thread(target=self._start_mission, args=("lifelong", "shelter_zero"), daemon=True).start(),
+            'start_shelter_zero': lambda: threading.Thread(target=self._start_mission, args=("lifelong", "shelter_012.7"), daemon=True).start(),
             'start_shelter':      lambda: threading.Thread(target=self._start_mission, args=("lifelong", "shelter_map"), daemon=True).start(),
             'start_kitchen':      lambda: threading.Thread(target=self._start_mission, args=("lifelong", "kitchen_map"), daemon=True).start(),
             'start_mapping':      lambda: threading.Thread(target=self._start_mission, args=("mapping", "none"), daemon=True).start(),
