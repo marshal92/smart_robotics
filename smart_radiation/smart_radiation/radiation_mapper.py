@@ -304,7 +304,7 @@ class RadiationMapperManager(Node):
         
         self.worker = None
         self.executor_thread = None
-        self.executor = None
+        self.worker_executor = None
         
         self.add_on_set_parameters_callback(self.param_callback)
         self.set_parameters([Parameter('use_sim_time', Parameter.Type.BOOL, False)])
@@ -314,17 +314,17 @@ class RadiationMapperManager(Node):
     def _apply_state(self, is_recording):
         if is_recording and self.worker is None:
             self.worker = RadiationMapperWorker(use_sim_time=self.worker_sim_time)
-            self.executor = rclpy.executors.SingleThreadedExecutor()
-            self.executor.add_node(self.worker)
-            self.executor_thread = __import__('threading').Thread(target=self.executor.spin, daemon=True)
+            self.worker_executor = rclpy.executors.SingleThreadedExecutor()
+            self.worker_executor.add_node(self.worker)
+            self.executor_thread = __import__('threading').Thread(target=self.worker_executor.spin, daemon=True)
             self.executor_thread.start()
         elif not is_recording and self.worker is not None:
             self.worker._save_map()
-            self.executor.shutdown()
+            self.worker_executor.shutdown()
             self.executor_thread.join()
             self.worker.destroy_node()
             self.worker = None
-            self.executor = None
+            self.worker_executor = None
 
     def param_callback(self, params):
         for param in params:
@@ -376,7 +376,7 @@ def main(args=None):
     finally:
         if manager.worker is not None:
             manager.worker._save_map()
-            manager.executor.shutdown()
+            manager.worker_executor.shutdown()
             manager.executor_thread.join()
             manager.worker.destroy_node()
         manager.destroy_node()

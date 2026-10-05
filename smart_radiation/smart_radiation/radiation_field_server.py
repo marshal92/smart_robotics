@@ -102,11 +102,14 @@ class RadiationFieldServer(Node):
                 pass
 
     def trigger_cb(self, msg):
+        self.get_logger().info("==> Received /radiation/map_updated trigger! Loading new SHM map...")
         self.load_map_from_disk()
         if self.last_map_msg is not None:
             self.cached_width = 0
             self.cached_height = 0
             self.map_callback(self.last_map_msg)
+        else:
+            self.get_logger().warn("Trigger received but no global map available to overlay on.")
 
     def map_callback(self, map_msg):
         if self.raw_dose_map is None:
@@ -183,9 +186,8 @@ class RadiationFieldServer(Node):
         rad_msg.header.stamp = self.last_map_msg.header.stamp
         rad_msg.info = self.last_map_msg.info
         rad_msg.data = final_grid.flatten().tolist()
-        
         self.rad_pub.publish(rad_msg)
-
+        self.get_logger().info(f"==> Published OccupancyGrid. Active: {self.is_active}, Max Value: {np.max(final_grid)}, Non-zero: {np.count_nonzero(final_grid > 0)}")
         heatmap_gray = (final_grid * 255.0 / 100.0).astype(np.uint8)
         heatmap_color = cv2.applyColorMap(heatmap_gray, cv2.COLORMAP_TURBO)
         

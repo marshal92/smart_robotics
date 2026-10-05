@@ -44,6 +44,13 @@ class MissionManager(Node):
         # self.sub = self.create_subscription(String, '/system_command', self.command_cb, qos)
         self.sub = self.create_subscription(SmartCommand, '/smart_command', self.command_cb, qos)
 
+        # Pre-create clients to avoid DDS discovery timeouts during missions
+        self.client_mapper = self.create_client(SetParameters, '/radiation_mapper/set_parameters')
+        self.client_server = self.create_client(SetParameters, '/radiation_field_server/set_parameters')
+        self.client_geiger = self.create_client(SetParameters, '/virtual_geiger/set_parameters')
+        self.client_mapper_save = self.create_client(Trigger, '/radiation_mapper/save_map')
+        self.client_mapper_clear = self.create_client(Trigger, '/radiation_mapper/clear_map')
+
         self.get_logger().info(f"Mission Manager started. sim_time={self.use_sim_time}")
 
     # MANAGEMENT OF THE SESSION
@@ -192,21 +199,19 @@ class MissionManager(Node):
             self.get_logger().info(f"Radiation Mapper set to: {map_path}, recording={is_recording}")
             
     def _native_radiation_server_params(self, map_path):
-        client_server = self.create_client(SetParameters, '/radiation_field_server/set_parameters')
-        if client_server.wait_for_service(timeout_sec=2.0):
+        if self.client_server.wait_for_service(timeout_sec=1.0):
             req = SetParameters.Request()
             p1 = Parameter(name='map_path', value=ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=map_path))
             req.parameters.append(p1)
-            client_server.call_async(req)
+            self.client_server.call_async(req)
             self.get_logger().info(f"Radiation Field Server set to: {map_path}")
             
     def _native_virtual_geiger_params(self, map_path):
-        client_geiger = self.create_client(SetParameters, '/virtual_geiger/set_parameters')
-        if client_geiger.wait_for_service(timeout_sec=2.0):
+        if self.client_geiger.wait_for_service(timeout_sec=1.0):
             req = SetParameters.Request()
             p1 = Parameter(name='map_path', value=ParameterValue(type=ParameterType.PARAMETER_STRING, string_value=map_path))
             req.parameters.append(p1)
-            client_geiger.call_async(req)
+            self.client_geiger.call_async(req)
             self.get_logger().info(f"Virtual Geiger set to: {map_path}")
             
     def _native_radiation_mapper_trigger(self, service_name):
@@ -290,23 +295,27 @@ class MissionManager(Node):
         elif action == 'rad_load':
             map_name = cmd_parts[1] if len(cmd_parts) > 1 else "explored_map"
             if not map_name.endswith('.npy'): map_name += '.npy'
-            self._native_radiation_mapper_params(map_name, is_recording=False)
-            self._native_radiation_server_params(map_name)
-            self._native_virtual_geiger_params(map_name)
-            self._native_set_radiation(True) # Auto-enable radiation when map is explicitly loaded
+            def _do_load():
+                self._native_radiation_mapper_params(map_name, is_recording=False)
+                self._native_radiation_server_params(map_name)
+                self._native_virtual_geiger_params(map_name)
+                self._native_set_radiation(True) # Auto-enable radiation when map is explicitly loaded
+            threading.Thread(target=_do_load, daemon=True).start()
         elif action == 'rad_record':
             map_name = cmd_parts[1] if len(cmd_parts) > 1 else "explored_map"
             if not map_name.endswith('.npy'): map_name += '.npy'
-            self._native_radiation_mapper_params(map_name, is_recording=True)
-            self._native_radiation_server_params("/dev/shm/live_rad_map.npy")
+            def _do_record():
+                self._native_radiation_mapper_params(map_name, is_recording=True)
+                self._native_radiation_server_params("/dev/shm/live_rad_map.npy")
+            threading.Thread(target=_do_record, daemon=True).start()
         elif action == 'rad_save':
             self._native_radiation_mapper_trigger('/radiation_mapper/save_map')
         elif action == 'rad_clear':
             self._native_radiation_mapper_trigger('/radiation_mapper/clear_map')
         elif action == 'rad_on':
-            self._native_set_radiation(True)
+            threading.Thread(target=self._native_set_radiation, args=(True,), daemon=True).start()
         elif action == 'rad_off':
-            self._native_set_radiation(False)
+            threading.Thread(target=self._native_set_radiation, args=(False,), daemon=True).start()
         else:
             self.get_logger().error(f"Unknown system command: '{cmd}'")
 
