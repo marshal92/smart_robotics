@@ -7,6 +7,8 @@ export function useMapLayer(viewerRef) {
   let mapOrigin = { x: 0, y: 0, z: 0 }
   let mapOrientation = { x: 0, y: 0, z: 0, w: 1 }
   let activeTopics = []
+  let lastFrameId = ''
+  let lastData = ''
 
   function setupMap(ros) {
     const viewer = viewerRef.value
@@ -20,6 +22,12 @@ export function useMapLayer(viewerRef) {
     activeTopics.push(mapSub)
     
     mapSub.subscribe((msg) => {
+      if (mapPlane && msg.header.frame_id === lastFrameId && msg.data === lastData) {
+        return
+      }
+      lastFrameId = msg.header.frame_id
+      lastData = msg.data
+
       const parts = msg.header.frame_id.split('|')
       if (parts.length < 9) return
       
@@ -119,6 +127,8 @@ export function useMapLayer(viewerRef) {
       }
     })
     activeTopics = []
+    lastFrameId = ''
+    lastData = ''
     
     if (mapPlane && viewerRef.value) {
       viewerRef.value.scene.remove(mapPlane)

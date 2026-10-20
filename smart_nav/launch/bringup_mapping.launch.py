@@ -9,12 +9,16 @@ def generate_launch_description():
     pkg_smart_nav = FindPackageShare('smart_nav')
     pkg_nav2_bringup = FindPackageShare('nav2_bringup')
 
+    map_name_arg = DeclareLaunchArgument('map_name', default_value='none')
     use_sim_time_arg = DeclareLaunchArgument('use_sim_time', default_value='true')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     slam_mapping_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([pkg_smart_nav, 'launch', 'slam_mapping.launch.py'])),
-        launch_arguments={'use_sim_time': use_sim_time}.items()
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'map_name': LaunchConfiguration('map_name')
+        }.items()
     )
 
     nav2_config_path = PathJoinSubstitution([pkg_smart_nav, 'config', 'nav2_params.yaml'])
@@ -28,6 +32,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        map_name_arg,
         use_sim_time_arg,
         slam_mapping_launch,
         TimerAction(period=3.0, actions=[nav2_launch])

@@ -348,11 +348,12 @@ function createScene() {
   })
   viewerRef.value = viewer
 
-  window.addEventListener('theme-changed', (e) => {
+  themeChangedHandler = (e) => {
     if (viewer) {
       viewer.setBackground(e.detail ? 0x555555 : 0x111111)
     }
-  })
+  }
+  window.addEventListener('theme-changed', themeChangedHandler)
   
   // Enable shadows
   viewer.renderer.shadowMap.enabled = true
@@ -498,7 +499,13 @@ function connectSceneData() {
     return intersects.length > 0 ? intersects[0].point : null
   }
 
+  let lastHoverUpdate = 0
   mouseMoveHandler = (event) => {
+    if (!dragStartPoint) {
+      const now = performance.now()
+      if (now - lastHoverUpdate < 50) return // Throttle hover raycast to 20Hz
+      lastHoverUpdate = now
+    }
     const point = getMapIntersection(event)
     if (point) {
       hoverCoords.value = { x: point.x, y: point.y }
@@ -690,6 +697,11 @@ function connectSceneData() {
 }
 
 onBeforeUnmount(() => {
+  if (themeChangedHandler) {
+    window.removeEventListener('theme-changed', themeChangedHandler)
+    themeChangedHandler = null
+  }
+  disconnectSceneData()
   if (urdfModel) {
     urdfModel.dispose()
     urdfModel = null

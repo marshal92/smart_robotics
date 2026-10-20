@@ -96,19 +96,20 @@ class WaypointManager(Node):
         elif msg.target_system == 'nav' and msg.command == 'go_to_named':
             if name in self.waypoints:
                 wp = self.waypoints[name]
+                laps = max(1, int(payload.get("laps", 1)))
                 cmd_msg = SmartCommand()
                 cmd_msg.target_system = 'nav'
                 
                 # If this is a route, send an array of points
                 if wp.get("type") == "route":
                     cmd_msg.command = 'waypoints'
-                    cmd_msg.payload_json = json.dumps({"points": wp["points"]})
-                    self.get_logger().info(f"Sending Route '{name.upper()}' to Nav Coordinator.")
+                    cmd_msg.payload_json = json.dumps({"points": wp["points"], "laps": laps, "name": name})
+                    self.get_logger().info(f"Sending Route '{name.upper()}' (laps={laps}) to Nav Coordinator.")
                 # If a single point, go_to
                 else:
                     cmd_msg.command = 'go_to'
-                    cmd_msg.payload_json = json.dumps({"x": wp["x"], "y": wp["y"], "yaw": wp["yaw"]})
-                    self.get_logger().info(f"Sending Point '{name.upper()}' to Nav Coordinator.")
+                    cmd_msg.payload_json = json.dumps({"x": wp["x"], "y": wp["y"], "yaw": wp["yaw"], "laps": laps, "name": name})
+                    self.get_logger().info(f"Sending Point '{name.upper()}' (laps={laps}) to Nav Coordinator.")
                 
                 self.cmd_pub.publish(cmd_msg)
             else:

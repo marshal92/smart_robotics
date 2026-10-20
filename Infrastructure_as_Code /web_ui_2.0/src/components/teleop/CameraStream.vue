@@ -12,13 +12,21 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRosStore } from '../../stores/rosStore'
-import { switchCameraTopic } from '../../services/rosConnection'
+import { switchCameraTopic, stopCameraStream } from '../../services/rosConnection'
 
 const store = useRosStore()
 const camContainer = ref(null)
 const isYolo = ref(false)
+
+onMounted(() => {
+  switchCameraTopic(isYolo.value ? '/yolo_overlay/compressed' : '/camera/image_raw/compressed')
+})
+
+onBeforeUnmount(() => {
+  stopCameraStream()
+})
 
 const setTopic = (mode) => {
   isYolo.value = (mode === 'yolo')

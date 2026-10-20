@@ -14,6 +14,9 @@ export const useRosStore = defineStore('ros', {
     logs: [],
     waypoints: {},
     routeQueue: [],
+    commandQueue: [],
+    queueMode: false,
+    lapsCount: 1,
     activeRobotType: null, // 'base' or 'shadow'
     lightOn: false
   }),
@@ -47,6 +50,20 @@ export const useRosStore = defineStore('ros', {
     },
     clearRouteQueue() {
       this.routeQueue = []
+    },
+    addCommandToQueue(name, type, laps = 1) {
+      this.commandQueue.push({
+        id: Date.now() + Math.random(),
+        name,
+        type,
+        laps: Math.max(1, parseInt(laps) || 1)
+      })
+    },
+    removeCommandFromQueue(index) {
+      this.commandQueue.splice(index, 1)
+    },
+    clearCommandQueue() {
+      this.commandQueue = []
     },
     setActiveRobotType(type) {
       this.activeRobotType = type

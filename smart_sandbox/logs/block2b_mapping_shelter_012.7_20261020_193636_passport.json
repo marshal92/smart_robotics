@@ -1,0 +1,165 @@
+{
+  "experiment": "Chapter 4 - Section 4.2 Block 2B (SLAM Localization vs Continued Mapping)",
+  "run_id": "block2b_mapping_shelter_012.7_20261020_193636",
+  "start_time_iso": "2026-10-20T19:36:36.883112",
+  "mode_label": "mapping",
+  "detected_slam_executable": "async_slam_toolbox_node",
+  "map_name": "shelter_012.7",
+  "sample_rate_hz": 1.0,
+  "notes": "",
+  "files": {
+    "csv_timeseries": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_sandbox/logs/block2b_mapping_shelter_012.7_20261020_193636_timeseries.csv",
+    "passport_json": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_sandbox/logs/block2b_mapping_shelter_012.7_20261020_193636_passport.json"
+  },
+  "hardware_and_os": {
+    "hostname": "oleksandr-ThinkPad",
+    "os": "Linux 7.0.0-38-generic",
+    "processor": "x86_64",
+    "cpu_physical_cores": 6,
+    "cpu_logical_cores": 12,
+    "ram_total_gb": 30.99
+  },
+  "tracked_processes_at_start": {
+    "slam_toolbox": {
+      "pid": 19154,
+      "exe": "async_slam_toolbox_node",
+      "cmdline": "/opt/ros/jazzy/lib/slam_toolbox/async_slam_toolbox_node --ros-args -r __node:=slam_toolbox -r __ns:=/ --params-file /tmp/tmp3_63vqhp --params-file /tmp/launch_params_09euuc9k"
+    },
+    "controller_server": {
+      "pid": 19221,
+      "exe": "controller_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_controller/controller_server --ros-args --log-level info --ros-args -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static -r cmd_vel:=cmd_vel_nav"
+    },
+    "smoother_server": {
+      "pid": 19222,
+      "exe": "smoother_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_smoother/smoother_server --ros-args --log-level info --ros-args -r __node:=smoother_server -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "planner_server": {
+      "pid": 19223,
+      "exe": "planner_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_planner/planner_server --ros-args --log-level info --ros-args -r __node:=planner_server -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "route_server": {
+      "pid": 19224,
+      "exe": "route_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_route/route_server --ros-args --log-level info --ros-args -r __node:=route_server -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "behavior_server": {
+      "pid": 19225,
+      "exe": "behavior_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_behaviors/behavior_server --ros-args --log-level info --ros-args -r __node:=behavior_server -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static -r cmd_vel:=cmd_vel_nav"
+    },
+    "bt_navigator": {
+      "pid": 19226,
+      "exe": "bt_navigator",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_bt_navigator/bt_navigator --ros-args --log-level info --ros-args -r __node:=bt_navigator -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "waypoint_follower": {
+      "pid": 19227,
+      "exe": "waypoint_follower",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_waypoint_follower/waypoint_follower --ros-args --log-level info --ros-args -r __node:=waypoint_follower -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "velocity_smoother": {
+      "pid": 19228,
+      "exe": "velocity_smoother",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_velocity_smoother/velocity_smoother --ros-args --log-level info --ros-args -r __node:=velocity_smoother -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static -r cmd_vel:=cmd_vel_nav"
+    },
+    "collision_monitor": {
+      "pid": 19229,
+      "exe": "collision_monitor",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_collision_monitor/collision_monitor --ros-args --log-level info --ros-args -r __node:=collision_monitor -p use_sim_time:=True --params-file /tmp/launch_params_r54lmoqg -r /tf:=tf -r /tf_static:=tf_static"
+    }
+  },
+  "ros_parameters_snapshot": {
+    "slam_toolbox": "/slam_toolbox:\n  ros__parameters:\n    /bond_disable_heartbeat_timeout: true\n    angle_variance_penalty: 0.6\n    base_frame: base_footprint\n    ceres_dogleg_type: TRADITIONAL_DOGLEG\n    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY\n    ceres_loss_function: None\n    ceres_preconditioner: SCHUR_JACOBI\n    ceres_trust_strategy: LEVENBERG_MARQUARDT\n    check_min_dist_and_heading_precisely: false\n    coarse_angle_resolution: 0.0349\n    coarse_search_angle_offset: 0.349\n    correlation_search_space_dimension: 0.6\n    correlation_search_space_resolution: 0.01\n    correlation_search_space_smear_deviation: 0.1\n    debug_logging: false\n    distance_variance_penalty: 0.7\n    do_loop_closing: true\n    enable_interactive_mode: true\n    fine_search_angle_offset: 0.00349\n    interactive_mode: false\n    link_match_minimum_response_fine: 0.1\n    link_scan_maximum_distance: 4.0\n    loop_match_maximum_variance_coarse: 3.0\n    loop_match_minimum_chain_size: 10\n    loop_match_minimum_response_coarse: 0.35\n    loop_match_minimum_response_fine: 0.45\n    loop_search_maximum_distance: 3.0\n    loop_search_space_dimension: 8.0\n    loop_search_space_resolution: 0.05\n    loop_search_space_smear_deviation: 0.03\n    map_file_name: /home/oleksandr/ros2_ws/install/smart_nav/share/smart_nav/maps/shelter_012.7\n    map_frame: map\n    map_name: /map\n    map_start_at_dock: false\n    map_start_pose:\n    - 0.0\n    - 0.0\n    - 0.0\n    map_update_interval: 1.0\n    max_laser_range: 12.0\n    min_pass_through: 2\n    minimum_angle_penalty: 0.5\n    minimum_distance_penalty: 0.5\n    minimum_time_interval: 0.5\n    minimum_travel_distance: 0.1\n    minimum_travel_heading: 0.1\n    mode: mapping\n    occupancy_threshold: 0.1\n    odom_frame: odom\n    paused_new_measurements: false\n    paused_processing: false\n    position_covariance_scale: 1.0\n    qos_overrides:\n      /clock:\n        subscription:\n          depth: 1\n          durability: volatile\n          history: keep_last\n          reliability: best_effort\n      /tf:\n        publisher:\n          depth: 100\n          durability: volatile\n          history: keep_last\n          reliability: reliable\n    resolution: 0.05\n    restamp_tf: false\n    scan_buffer_maximum_scan_distance: 10.0\n    scan_buffer_size: 50\n    scan_queue_size: 1\n    scan_topic: /scan\n    solver_plugin: solver_plugins::CeresSolver\n    stack_size_to_use: 40000000\n    start_type_description_service: true\n    tf_buffer_duration: 30.0\n    throttle_scans: 1\n    transform_publish_period: 0.1\n    transform_timeout: 0.8\n    use_lifecycle_manager: false\n    use_map_saver: true\n    use_response_expansion: true\n    use_scan_barycenter: true\n    use_scan_matching: true\n    use_sim_time: true\n    yaw_covariance_scale: 1.0"
+  },
+  "summary": {
+    "duration_s": 818.28,
+    "samples_recorded": 815,
+    "total_distance_traveled_m": 524.137,
+    "pose_graph": {
+      "nodes_start": 302,
+      "nodes_end": 1488,
+      "nodes_added": 1186,
+      "edges_start": 450,
+      "edges_end": 11070,
+      "edges_added": 10620
+    },
+    "map_grid": {
+      "width": 593,
+      "height": 1138,
+      "resolution_m": 0.05000000074505806,
+      "free_cells_end": 198623,
+      "free_area_m2_end": 496.558,
+      "map_updates_received": 816
+    },
+    "performance": {
+      "slam_toolbox_cpu_pct": {
+        "mean": 120.33,
+        "std": 50.523,
+        "min": 18.0,
+        "p50": 124.8,
+        "p95": 194.9,
+        "max": 234.0
+      },
+      "slam_toolbox_rss_mb": {
+        "mean": 90.053,
+        "std": 12.392,
+        "min": 65.03,
+        "p50": 91.23,
+        "p95": 105.519,
+        "max": 106.7
+      },
+      "controller_server_cpu_pct": {
+        "mean": 20.88,
+        "std": 1.212,
+        "min": 18.0,
+        "p50": 20.9,
+        "p95": 23.0,
+        "max": 26.0
+      },
+      "controller_server_rss_mb": {
+        "mean": 44.529,
+        "std": 1.908,
+        "min": 39.11,
+        "p50": 45.68,
+        "p95": 45.93,
+        "max": 45.94
+      },
+      "planner_server_cpu_pct": {
+        "mean": 24.574,
+        "std": 2.851,
+        "min": 19.0,
+        "p50": 24.8,
+        "p95": 29.6,
+        "max": 33.0
+      },
+      "planner_server_rss_mb": {
+        "mean": 61.195,
+        "std": 1.793,
+        "min": 53.07,
+        "p50": 61.65,
+        "p95": 62.852,
+        "max": 63.23
+      },
+      "nav2_total_cpu_pct": {
+        "mean": 143.853,
+        "std": 6.658,
+        "min": 126.0,
+        "p50": 143.8,
+        "p95": 155.1,
+        "max": 164.0
+      },
+      "nav2_total_rss_mb": {
+        "mean": 372.03,
+        "std": 8.128,
+        "min": 346.51,
+        "p50": 375.69,
+        "p95": 378.21,
+        "max": 378.82
+      }
+    }
+  },
+  "end_time_iso": "2026-10-20T19:50:15.146404"
+}

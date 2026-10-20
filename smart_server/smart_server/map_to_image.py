@@ -16,6 +16,8 @@ class MapToImageNode(Node):
             1)
         self.img_pub = self.create_publisher(CompressedImage, '/map_image/compressed', 1)
         self.meta_pub = self.create_publisher(MapMetaData, '/map_metadata', 1)
+        self._last_hash = None
+        self._cached_png = None
         self.get_logger().info("MapToImage node started. Listening to /map...")
 
     def map_callback(self, msg):
@@ -28,47 +30,33 @@ class MapToImageNode(Node):
         
         if width == 0 or height == 0:
             return
-            
-        data = np.array(msg.data, dtype=np.int8).reshape((height, width))
-        
-        # Create RGBA image
-        img = np.zeros((height, width, 4), dtype=np.uint8)
-        
-        # Free space: White
-        free_mask = (data >= 0) & (data <= 25)
-        img[free_mask] = [255, 255, 255, 255]
-        
-        # Occupied space: Black
-        occ_mask = data > 25
-        img[occ_mask] = [0, 0, 0, 255]
-        
-        # Unknown space: Medium Grey instead of transparent (to avoid looking pitch black)
-        unk_mask = data < 0
-        img[unk_mask] = [128, 128, 128, 255]
-        
-        # OpenCV uses BGRA by default, but White/Black are the same.
-        # We MUST flip the image vertically because OpenCV encodes img[0] as the top of the PNG,
-        # and ThreeJS (with flipY=true) maps the bottom of the PNG to v=0.
-        img = cv2.flip(img, 0)
-        
-        # Compress to PNG
-        success, encoded_image = cv2.imencode('.png', img)
-        if not success:
-            self.get_logger().error("Failed to encode map image")
-            return
-            
-        img_msg = CompressedImage()
-        img_msg.header = msg.header
-        
-        # Atomically embed metadata to bypass Zenoh topic limits
+
         o = msg.info.origin.position
         q = msg.info.origin.orientation
         meta_str = f"map|{msg.info.resolution}|{o.x}|{o.y}|{o.z}|{q.x}|{q.y}|{q.z}|{q.w}"
+        cur_hash = hash((width, height, meta_str, bytes(msg.data)))
+
+        if cur_hash != self._last_hash or self._cached_png is None:
+            data = np.array(msg.data, dtype=np.int8).reshape((height, width))
+            # 1-channel grayscale image (4x faster to allocate & encode than 4-channel RGBA)
+            img = np.full((height, width), 128, dtype=np.uint8)
+            img[(data >= 0) & (data <= 25)] = 255
+            img[data > 25] = 0
+            img = cv2.flip(img, 0)
+
+            success, encoded_image = cv2.imencode('.png', img)
+            if not success:
+                self.get_logger().error("Failed to encode map image")
+                return
+            self._cached_png = encoded_image.tobytes()
+            self._last_hash = cur_hash
+
+        img_msg = CompressedImage()
+        img_msg.header = msg.header
         img_msg.header.frame_id = meta_str
-        
         img_msg.format = "png"
-        img_msg.data = encoded_image.tobytes()
-        
+        img_msg.data = self._cached_png
+
         self.img_pub.publish(img_msg)
 
 def main(args=None):

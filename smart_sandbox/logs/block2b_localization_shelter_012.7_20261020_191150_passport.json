@@ -1,0 +1,165 @@
+{
+  "experiment": "Chapter 4 - Section 4.2 Block 2B (SLAM Localization vs Continued Mapping)",
+  "run_id": "block2b_localization_shelter_012.7_20261020_191150",
+  "start_time_iso": "2026-10-20T19:11:50.227349",
+  "mode_label": "localization",
+  "detected_slam_executable": "localization_slam_toolbox_node",
+  "map_name": "shelter_012.7",
+  "sample_rate_hz": 1.0,
+  "notes": "",
+  "files": {
+    "csv_timeseries": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_sandbox/logs/block2b_localization_shelter_012.7_20261020_191150_timeseries.csv",
+    "passport_json": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_sandbox/logs/block2b_localization_shelter_012.7_20261020_191150_passport.json"
+  },
+  "hardware_and_os": {
+    "hostname": "oleksandr-ThinkPad",
+    "os": "Linux 7.0.0-38-generic",
+    "processor": "x86_64",
+    "cpu_physical_cores": 6,
+    "cpu_logical_cores": 12,
+    "ram_total_gb": 30.99
+  },
+  "tracked_processes_at_start": {
+    "slam_toolbox": {
+      "pid": 16711,
+      "exe": "localization_slam_toolbox_node",
+      "cmdline": "/opt/ros/jazzy/lib/slam_toolbox/localization_slam_toolbox_node --ros-args -r __node:=slam_toolbox -r __ns:=/ --params-file /tmp/tmp7pqokn1z --params-file /tmp/launch_params_mbvdxjp7"
+    },
+    "controller_server": {
+      "pid": 16764,
+      "exe": "controller_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_controller/controller_server --ros-args --log-level info --ros-args -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static -r cmd_vel:=cmd_vel_nav"
+    },
+    "smoother_server": {
+      "pid": 16765,
+      "exe": "smoother_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_smoother/smoother_server --ros-args --log-level info --ros-args -r __node:=smoother_server -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "planner_server": {
+      "pid": 16766,
+      "exe": "planner_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_planner/planner_server --ros-args --log-level info --ros-args -r __node:=planner_server -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "route_server": {
+      "pid": 16767,
+      "exe": "route_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_route/route_server --ros-args --log-level info --ros-args -r __node:=route_server -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "behavior_server": {
+      "pid": 16768,
+      "exe": "behavior_server",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_behaviors/behavior_server --ros-args --log-level info --ros-args -r __node:=behavior_server -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static -r cmd_vel:=cmd_vel_nav"
+    },
+    "bt_navigator": {
+      "pid": 16769,
+      "exe": "bt_navigator",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_bt_navigator/bt_navigator --ros-args --log-level info --ros-args -r __node:=bt_navigator -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "waypoint_follower": {
+      "pid": 16770,
+      "exe": "waypoint_follower",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_waypoint_follower/waypoint_follower --ros-args --log-level info --ros-args -r __node:=waypoint_follower -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static"
+    },
+    "velocity_smoother": {
+      "pid": 16771,
+      "exe": "velocity_smoother",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_velocity_smoother/velocity_smoother --ros-args --log-level info --ros-args -r __node:=velocity_smoother -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static -r cmd_vel:=cmd_vel_nav"
+    },
+    "collision_monitor": {
+      "pid": 16772,
+      "exe": "collision_monitor",
+      "cmdline": "/opt/ros/jazzy/lib/nav2_collision_monitor/collision_monitor --ros-args --log-level info --ros-args -r __node:=collision_monitor -p use_sim_time:=True --params-file /tmp/launch_params_ruvbf7a9 -r /tf:=tf -r /tf_static:=tf_static"
+    }
+  },
+  "ros_parameters_snapshot": {
+    "slam_toolbox": "unavailable"
+  },
+  "summary": {
+    "duration_s": 1151.51,
+    "samples_recorded": 1148,
+    "total_distance_traveled_m": 1116.328,
+    "pose_graph": {
+      "nodes_start": 302,
+      "nodes_end": 371,
+      "nodes_added": 69,
+      "edges_start": 450,
+      "edges_end": 641,
+      "edges_added": 191
+    },
+    "map_grid": {
+      "width": 590,
+      "height": 1139,
+      "resolution_m": 0.05000000074505806,
+      "free_cells_end": 184026,
+      "free_area_m2_end": 460.065,
+      "map_updates_received": 1150
+    },
+    "performance": {
+      "slam_toolbox_cpu_pct": {
+        "mean": 57.408,
+        "std": 15.218,
+        "min": 18.8,
+        "p50": 57.35,
+        "p95": 83.0,
+        "max": 101.0
+      },
+      "slam_toolbox_rss_mb": {
+        "mean": 77.063,
+        "std": 3.085,
+        "min": 65.28,
+        "p50": 77.98,
+        "p95": 78.0,
+        "max": 78.01
+      },
+      "controller_server_cpu_pct": {
+        "mean": 21.236,
+        "std": 0.94,
+        "min": 17.5,
+        "p50": 21.0,
+        "p95": 23.0,
+        "max": 26.0
+      },
+      "controller_server_rss_mb": {
+        "mean": 43.203,
+        "std": 1.313,
+        "min": 38.85,
+        "p50": 43.87,
+        "p95": 43.96,
+        "max": 44.07
+      },
+      "planner_server_cpu_pct": {
+        "mean": 24.349,
+        "std": 2.64,
+        "min": 18.8,
+        "p50": 24.6,
+        "p95": 29.0,
+        "max": 32.0
+      },
+      "planner_server_rss_mb": {
+        "mean": 61.401,
+        "std": 2.076,
+        "min": 52.62,
+        "p50": 61.95,
+        "p95": 63.26,
+        "max": 63.26
+      },
+      "nav2_total_cpu_pct": {
+        "mean": 145.974,
+        "std": 6.913,
+        "min": 112.6,
+        "p50": 145.45,
+        "p95": 157.665,
+        "max": 169.0
+      },
+      "nav2_total_rss_mb": {
+        "mean": 371.77,
+        "std": 7.754,
+        "min": 342.54,
+        "p50": 374.67,
+        "p95": 376.97,
+        "max": 377.01
+      }
+    }
+  },
+  "end_time_iso": "2026-10-20T19:31:01.727600"
+}

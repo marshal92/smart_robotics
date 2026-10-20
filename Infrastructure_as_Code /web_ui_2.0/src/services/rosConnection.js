@@ -15,8 +15,9 @@ export function getRosInstance() {
 export const switchCameraTopic = (topicName) => {
   if (camSub) {
     camSub.unsubscribe()
+    camSub = null
   }
-  if (!ros) return
+  if (!ros || !topicName) return
   
   const store = useRosStore()
   camSub = new ROSLIB.Topic({
@@ -27,10 +28,18 @@ export const switchCameraTopic = (topicName) => {
   camSub.subscribe((msg) => store.updateCameraStream(msg.data))
 }
 
+export const stopCameraStream = () => {
+  if (camSub) {
+    camSub.unsubscribe()
+    camSub = null
+  }
+}
+
 let telemetrySub = null
 let fsmStatusSub = null
 let rosoutSub = null
 let wpListSub = null
+let lastWpJson = ''
 
 export function connectROS(url) {
   const store = useRosStore()
@@ -71,7 +80,7 @@ export function connectROS(url) {
     })
     fsmStatusSub.subscribe((msg) => store.setFsmState(msg.data))
 
-    switchCameraTopic('/camera/image_raw/compressed')
+    // Camera subscribes lazily only when CameraStream component is opened
 
     if (rosoutSub) rosoutSub.unsubscribe()
     rosoutSub = new ROSLIB.Topic({
@@ -82,12 +91,18 @@ export function connectROS(url) {
     rosoutSub.subscribe((msg) => store.addLog(msg))
 
     if (wpListSub) wpListSub.unsubscribe()
+    lastWpJson = ''
     wpListSub = new ROSLIB.Topic({
       ros: ros,
       name: '/waypoints_list',
       messageType: 'std_msgs/msg/String'
     })
-    wpListSub.subscribe((msg) => store.updateWaypoints(JSON.parse(msg.data)))
+    wpListSub.subscribe((msg) => {
+      if (msg.data !== lastWpJson) {
+        lastWpJson = msg.data
+        store.updateWaypoints(JSON.parse(msg.data))
+      }
+    })
   })
 
   ros.on('error', () => {

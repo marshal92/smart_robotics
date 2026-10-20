@@ -19,23 +19,29 @@ export function useWaypoints(viewerRef) {
     activeTopics.push(waypointSub)
 
     waypointSub.subscribe((msg) => {
+      const seenKeys = new Set()
+
       msg.markers.forEach(m => {
         const key = m.ns + m.id
+        if (m.action === 2) return // DELETE
+        seenKeys.add(key)
+
+        const sig = `${m.type}|${m.pose.position.x.toFixed(3)}|${m.pose.position.y.toFixed(3)}|${m.pose.position.z.toFixed(3)}|${m.color.r.toFixed(2)}|${m.color.g.toFixed(2)}|${m.color.b.toFixed(2)}|${m.color.a.toFixed(2)}|${m.text || ''}`
+
         if (waypointMeshes[key]) {
+          if (waypointMeshes[key].userData?.sig === sig) {
+            waypointMeshes[key].visible = showWaypoints.value
+            return
+          }
           const oldMesh = waypointMeshes[key]
           viewer.scene.remove(oldMesh)
-          
-          // Fix memory leak: Properly dispose of geometry, materials, and textures
           if (oldMesh.geometry) oldMesh.geometry.dispose()
           if (oldMesh.material) {
             if (oldMesh.material.map) oldMesh.material.map.dispose()
             oldMesh.material.dispose()
           }
-          
           delete waypointMeshes[key]
         }
-        
-        if (m.action === 2) return // DELETE
         
         let mMesh = null
         
@@ -86,6 +92,7 @@ export function useWaypoints(viewerRef) {
         }
 
         if (mMesh) {
+          mMesh.userData = { sig }
           mMesh.position.set(m.pose.position.x, m.pose.position.y, m.pose.position.z)
           if (m.type !== 9) {
             mMesh.quaternion.set(m.pose.orientation.x, m.pose.orientation.y, m.pose.orientation.z, m.pose.orientation.w)
@@ -97,6 +104,20 @@ export function useWaypoints(viewerRef) {
           waypointMeshes[key] = mMesh
         }
       })
+
+      // Remove meshes for waypoints that were deleted from the database
+      for (const existingKey in waypointMeshes) {
+        if (!seenKeys.has(existingKey)) {
+          const oldMesh = waypointMeshes[existingKey]
+          viewer.scene.remove(oldMesh)
+          if (oldMesh.geometry) oldMesh.geometry.dispose()
+          if (oldMesh.material) {
+            if (oldMesh.material.map) oldMesh.material.map.dispose()
+            oldMesh.material.dispose()
+          }
+          delete waypointMeshes[existingKey]
+        }
+      }
     })
   }
 

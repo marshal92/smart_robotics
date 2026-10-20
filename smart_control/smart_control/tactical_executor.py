@@ -19,8 +19,8 @@ class TacticalExecutorNode(Node):
         self.telemetry_pub = self.create_publisher(String, '/smart_telemetry', 10) # Mock telemetry status
         
         self.create_subscription(SmartCommand, '/smart_command', self.cmd_cb, 10)
-        self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
-        self.create_subscription(LaserScan, '/scan', self.scan_cb, 10)
+        self.odom_sub = None
+        self.scan_sub = None
         
         # State
         self.is_busy = False
@@ -30,6 +30,7 @@ class TacticalExecutorNode(Node):
         self.start_x = 0.0
         self.start_y = 0.0
         self.start_yaw = 0.0
+        self.start_pose_captured = False
         self.direction = 1.0 # 1.0 forward, -1.0 backward
         
         # Odometry
@@ -104,32 +105,46 @@ class TacticalExecutorNode(Node):
             offset = float(payload.get('offset', 0.0))
             self.execute_track(offset)
 
+    def _enable_odom_sub(self):
+        self.odom_ready = False
+        if self.odom_sub is None:
+            self.odom_sub = self.create_subscription(Odometry, '/odom', self.odom_cb, 10)
+
+    def _disable_odom_sub(self):
+        if self.odom_sub is not None:
+            self.destroy_subscription(self.odom_sub)
+            self.odom_sub = None
+        self.odom_ready = False
+
+    def _enable_scan_sub(self):
+        if self.scan_sub is None:
+            self.scan_sub = self.create_subscription(LaserScan, '/scan', self.scan_cb, 10)
+
+    def _disable_scan_sub(self):
+        if self.scan_sub is not None:
+            self.destroy_subscription(self.scan_sub)
+            self.scan_sub = None
+
     def stop_robot(self):
+        self._disable_scan_sub()
+        self._disable_odom_sub()
         msg = Twist()
         for _ in range(3):
             self.cmd_vel_pub.publish(msg)
             time.sleep(0.05)
 
     def execute_move(self, distance, direction_str):
-        if not self.odom_ready:
-            self.get_logger().error("Cannot move: No odometry.")
-            return
-            
+        self._enable_odom_sub()
         self.is_busy = True
         self.emergency_stop = False
+        self.start_pose_captured = False
         self.task_type = 'move'
         self.target_value = abs(distance)
         self.direction = 1.0 if direction_str == 'forward' else -1.0
-        
-        self.start_x = self.current_x
-        self.start_y = self.current_y
+        if self.direction > 0:
+            self._enable_scan_sub()
         
         self.get_logger().info(f"Starting tactical move: {distance}m {direction_str}")
-        
-        # We run the loop in a timer rather than blocking thread to keep ROS spinning nicely
-        # But for a quick script, a threaded approach or just a simple timer works.
-        # Since rclpy.spin() is running the main thread, blocking here blocks callbacks!
-        # We must use a Timer.
         self.timer = self.create_timer(0.05, self.move_loop)
         
     def move_loop(self):
@@ -139,6 +154,13 @@ class TacticalExecutorNode(Node):
             self.timer.cancel()
             self.get_logger().info("Move aborted due to emergency stop.")
             return
+
+        if not self.odom_ready:
+            return
+        if not self.start_pose_captured:
+            self.start_x = self.current_x
+            self.start_y = self.current_y
+            self.start_pose_captured = True
 
         dx = self.current_x - self.start_x
         dy = self.current_y - self.start_y
@@ -160,17 +182,13 @@ class TacticalExecutorNode(Node):
         self.cmd_vel_pub.publish(msg)
 
     def execute_turn(self, degrees):
-        if not self.odom_ready:
-            self.get_logger().error("Cannot turn: No odometry.")
-            return
-            
+        self._enable_odom_sub()
         self.is_busy = True
         self.emergency_stop = False
+        self.start_pose_captured = False
         self.task_type = 'turn'
         self.target_value = math.radians(abs(degrees))
         self.direction = 1.0 if degrees > 0 else -1.0
-        
-        self.start_yaw = self.current_yaw
         self.turned_so_far = 0.0
         
         self.get_logger().info(f"Starting tactical turn: {degrees} deg")
@@ -182,6 +200,13 @@ class TacticalExecutorNode(Node):
             self.is_busy = False
             self.timer.cancel()
             self.get_logger().info("Turn aborted.")
+            return
+
+        if not self.odom_ready:
+            return
+        if not self.start_pose_captured:
+            self.start_yaw = self.current_yaw
+            self.start_pose_captured = True
             return
 
         delta = self.current_yaw - self.start_yaw
@@ -205,6 +230,7 @@ class TacticalExecutorNode(Node):
 
     def execute_track(self, offset):
         self.task_type = 'track' # Important for scan_cb
+        self._enable_scan_sub()
         
         if self.emergency_stop:
             self.stop_robot()

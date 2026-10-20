@@ -12,11 +12,12 @@ def generate_launch_description():
 
     use_3d_lidar_arg = DeclareLaunchArgument('use_3d_lidar', default_value='false')
     god_mode_arg = DeclareLaunchArgument('god_mode', default_value='false')
+    gui_arg = DeclareLaunchArgument('gui', default_value='false')
     world_arg = DeclareLaunchArgument('world', default_value='213.sdf')
     spawn_x_arg = DeclareLaunchArgument('spawn_x', default_value='0.0')
     spawn_y_arg = DeclareLaunchArgument('spawn_y', default_value='0.0')
     spawn_yaw_arg = DeclareLaunchArgument('spawn_yaw', default_value='0.0')
-    use_arm_arg = DeclareLaunchArgument('use_arm', default_value='true')
+    use_arm_arg = DeclareLaunchArgument('use_arm', default_value='false')
 
     use_sim_time = 'true'
 
@@ -24,6 +25,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(PathJoinSubstitution([pkg_sim, 'launch', 'sim.launch.py'])),
         launch_arguments={
             'use_sim_time': use_sim_time,
+            'gui': LaunchConfiguration('gui'),
             'use_3d_lidar': LaunchConfiguration('use_3d_lidar'),
             'god_mode': LaunchConfiguration('god_mode'),
             'world': LaunchConfiguration('world'),
@@ -91,7 +93,7 @@ def generate_launch_description():
     )
     
     return LaunchDescription([
-        use_3d_lidar_arg, god_mode_arg, world_arg, use_arm_arg,
+        use_3d_lidar_arg, god_mode_arg, gui_arg, world_arg, use_arm_arg,
         spawn_x_arg, spawn_y_arg, spawn_yaw_arg,
         simulation_launch,
         control_core_launch,

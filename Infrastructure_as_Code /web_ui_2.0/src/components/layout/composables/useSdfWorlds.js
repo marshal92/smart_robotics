@@ -7,15 +7,33 @@ export function useSdfWorlds(viewerRef) {
   const sdfOpacity = ref(0.7)
   let sdfWorldGroup = null
 
+  function _disposeGroup(group) {
+    if (!group) return
+    group.traverse((child) => {
+      if (child.isMesh) {
+        if (child.geometry) child.geometry.dispose()
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose())
+          } else {
+            child.material.dispose()
+          }
+        }
+      }
+    })
+  }
+
   function loadSDFWorld(worldName) {
     const viewer = viewerRef.value
     if (!viewer) return
     
     const worldUrl = 'http://' + window.location.hostname + ':8080/install/smart_sim2real/share/smart_sim2real/worlds/' + worldName + '.sdf'
     
-    // Remove old world
+    // Remove and dispose old world
     if (sdfWorldGroup) {
       viewer.scene.remove(sdfWorldGroup)
+      _disposeGroup(sdfWorldGroup)
+      sdfWorldGroup = null
     }
 
     sdfWorldGroup = new THREE.Group()
@@ -140,7 +158,7 @@ export function useSdfWorlds(viewerRef) {
     const viewer = viewerRef.value
     if (sdfWorldGroup && viewer) {
       viewer.scene.remove(sdfWorldGroup)
-      // Recursive dispose could go here, but this is simple cleanup
+      _disposeGroup(sdfWorldGroup)
       sdfWorldGroup = null
     }
   }

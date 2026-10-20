@@ -4,6 +4,9 @@
       <button class="unified-btn c-red" @click="cancelNav">
         <div class="waypoint-name">CANCEL</div>
       </button>
+      <button class="unified-btn c-green" @click="resumeNav">
+        <div class="waypoint-name">▶ RESUME</div>
+      </button>
       <button v-for="(data, name) in store.waypoints" :key="name"
               class="unified-btn" :class="data.type === 'route' ? 'c-purple' : 'c-blue'"
               @click="goTo(name)">
@@ -22,12 +25,19 @@ const store = useRosStore()
 const emit = defineEmits(['close'])
 
 const goTo = (name) => {
-  pubSmartCommand('nav', 'go_to_named', { name })
+  const laps = Math.max(1, parseInt(store.lapsCount) || 1)
+  pubSmartCommand('nav', 'go_to_named', { name, laps })
   emit('close') // Optional: close popup after selection
 }
 
 const cancelNav = () => {
   pubSmartCommand('nav', 'cancel', { x: 0, y: 0, yaw: 0 })
+  emit('close')
+}
+
+const resumeNav = () => {
+  pubSmartCommand('operator', 'RESUME')
+  pubSmartCommand('nav', 'resume')
   emit('close')
 }
 </script>

@@ -15,7 +15,7 @@ def generate_launch_description():
     pkg_ros_gz_sim = FindPackageShare('ros_gz_sim')
 
     world_arg = DeclareLaunchArgument('world', default_value='213.sdf')
-    gui_arg = DeclareLaunchArgument('gui', default_value='true')
+    gui_arg = DeclareLaunchArgument('gui', default_value='false')
     use_3d_lidar_arg = DeclareLaunchArgument('use_3d_lidar', default_value='false')
     god_mode_arg = DeclareLaunchArgument('god_mode', default_value='false')
     
@@ -30,7 +30,7 @@ def generate_launch_description():
     ekf_config_path = PathJoinSubstitution([pkg_sim, 'config', 'ekf_sim.yaml'])
     urdf_wrapper_path = PathJoinSubstitution([pkg_sim, 'urdf', 'sim_wrapper.urdf.xacro'])
 
-    use_arm_arg = DeclareLaunchArgument('use_arm', default_value='true')
+    use_arm_arg = DeclareLaunchArgument('use_arm', default_value='false')
     use_arm = LaunchConfiguration('use_arm')
 
     set_model_path = AppendEnvironmentVariable('GZ_SIM_RESOURCE_PATH', PathJoinSubstitution([pkg_sim, 'models']))
