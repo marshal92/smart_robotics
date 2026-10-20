@@ -25,7 +25,7 @@
   <exec_depend>smart_nav</exec_depend>
   <exec_depend>smart_control</exec_depend>
   <exec_depend>smart_server</exec_depend>
-  <exec_depend>smart_radiation</exec_depend>
+  <exec_depend>asymmetric_radiation_core</exec_depend>
   <exec_depend>smart_plugins</exec_depend>
 
   <!-- Dependencies for the UGV platform -->

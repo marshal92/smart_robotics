@@ -19,6 +19,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(smart_interfaces REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_library(smart_plugins_core SHARED
   src/radiation_layer.cpp
@@ -59,6 +60,23 @@ ament_target_dependencies(stabilized_frame_publisher_node
   tf2_geometry_msgs
 )
 
+add_executable(radiation_mapper_node src/radiation_mapper_node.cpp)
+ament_target_dependencies(radiation_mapper_node
+  rclcpp
+  std_msgs
+  std_srvs
+  tf2_ros
+  geometry_msgs
+)
+
+add_executable(virtual_geiger_node src/virtual_geiger_node.cpp)
+ament_target_dependencies(virtual_geiger_node
+  rclcpp
+  std_msgs
+  tf2_ros
+  geometry_msgs
+)
+
 add_executable(telemetry_mux src/telemetry_mux.cpp)
 ament_target_dependencies(telemetry_mux 
   rclcpp 
@@ -68,7 +86,7 @@ ament_target_dependencies(telemetry_mux
   nlohmann_json
 )
 
-install(TARGETS smart_plugins_core alara_speed_reflex_node stabilized_frame_publisher_node telemetry_mux
+install(TARGETS smart_plugins_core alara_speed_reflex_node stabilized_frame_publisher_node telemetry_mux radiation_mapper_node virtual_geiger_node
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

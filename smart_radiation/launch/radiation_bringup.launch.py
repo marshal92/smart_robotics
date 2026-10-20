@@ -44,8 +44,8 @@ def generate_launch_description():
     )
 
     radiation_mapper_node = Node(
-        package='smart_radiation',
-        executable='radiation_mapper',
+        package='smart_plugins',
+        executable='radiation_mapper_node',
         name='radiation_mapper',
         output='screen',
         parameters=[{
@@ -65,8 +65,8 @@ def generate_launch_description():
     )
     
     virtual_geiger_node = Node(
-        package='smart_radiation',
-        executable='virtual_geiger',
+        package='smart_plugins',
+        executable='virtual_geiger_node',
         name='virtual_geiger',
         output='screen',
         condition=IfCondition(LaunchConfiguration('use_virtual_geiger')),
