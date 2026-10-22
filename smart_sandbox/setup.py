@@ -24,7 +24,9 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'block2a_logger = smart_sandbox.block2a_logger:main',
             'block2b_logger = smart_sandbox.block2b_logger:main',
+            'block4_logger = smart_sandbox.block4_logger:main',
         ],
     },
 )

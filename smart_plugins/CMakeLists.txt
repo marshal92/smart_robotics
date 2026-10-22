@@ -7,6 +7,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_core REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -54,6 +55,7 @@ ament_target_dependencies(alara_speed_reflex_node
 add_executable(stabilized_frame_publisher_node src/stabilized_frame_publisher.cpp)
 ament_target_dependencies(stabilized_frame_publisher_node
   rclcpp
+  sensor_msgs
   tf2
   tf2_ros
   geometry_msgs
@@ -99,4 +101,5 @@ ament_export_include_directories(include)
 ament_export_libraries(smart_plugins_core)
 ament_export_dependencies(rclcpp nav2_costmap_2d nav2_core pluginlib std_msgs geometry_msgs nav_msgs)
 ament_export_libraries(smart_plugins_core)
+
 ament_package()

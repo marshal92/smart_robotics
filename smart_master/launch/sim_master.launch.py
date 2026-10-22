@@ -1,16 +1,18 @@
 import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch.conditions import IfCondition
 
 def generate_launch_description():
     pkg_sim = FindPackageShare('smart_sim2real')
 
     use_3d_lidar_arg = DeclareLaunchArgument('use_3d_lidar', default_value='false')
+    stabilize_lidar_arg = DeclareLaunchArgument('stabilize_lidar', default_value='true')
     god_mode_arg = DeclareLaunchArgument('god_mode', default_value='false')
     gui_arg = DeclareLaunchArgument('gui', default_value='false')
     world_arg = DeclareLaunchArgument('world', default_value='213.sdf')
@@ -61,26 +63,14 @@ def generate_launch_description():
         name='stabilized_frame_publisher',
         output='screen',
         condition=IfCondition(LaunchConfiguration('use_3d_lidar')),
-        parameters=[{'use_sim_time': True}]
-    )
-    
-    pc_to_laserscan_node = Node(
-        condition=IfCondition(LaunchConfiguration('use_3d_lidar')),
-        package='pointcloud_to_laserscan',
-        executable='pointcloud_to_laserscan_node',
-        name='pc_to_laserscan',
-        output='screen',
-        remappings=[('cloud_in', '/points'), ('scan', '/scan')],
         parameters=[{
-            'target_frame': 'base_stabilized',
-            'min_height': 0.22,
-            'max_height': 1.0,
-            'angle_min': -3.14159, 
-            'angle_max': 3.14159,
-            'range_min': 0.15,
-            'range_max': 10.0,
-            'use_inf': True,
-            'use_sim_time': True
+            'use_sim_time': True,
+            'stabilize': ParameterValue(LaunchConfiguration('stabilize_lidar'), value_type=bool),
+            'min_height': 0.30,
+            'max_height': 0.80,
+            'low_min_height': 0.10,
+            'low_max_height': 0.30,
+            'min_step_height': 0.09
         }]
     )
 
@@ -93,12 +83,11 @@ def generate_launch_description():
     )
     
     return LaunchDescription([
-        use_3d_lidar_arg, god_mode_arg, gui_arg, world_arg, use_arm_arg,
+        use_3d_lidar_arg, stabilize_lidar_arg, god_mode_arg, gui_arg, world_arg, use_arm_arg,
         spawn_x_arg, spawn_y_arg, spawn_yaw_arg,
         simulation_launch,
         control_core_launch,
         radiation_bringup_launch,
         stabilized_frame_node,
-        pc_to_laserscan_node,
         server_launch
     ])

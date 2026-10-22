@@ -1,0 +1,123 @@
+{
+  "experiment": "Chapter 4 - §4.2 Block 4 (3D LiDAR Spatial Reduction on Terrain)",
+  "run_id": "block4_stabilized_20261022_171813",
+  "timestamp_iso": "2026-10-22T17:20:50.113750",
+  "variant": "stabilized",
+  "world": "shelter_zero.sdf",
+  "hardware_and_chassis": {
+    "hostname": "oleksandr-ThinkPad",
+    "processor": "x86_64",
+    "cpu_count": 12,
+    "lidar_mount_height_m": 0.3,
+    "chassis_dimensions_m": {
+      "length": 0.7,
+      "width": 0.56,
+      "height": 0.35
+    },
+    "robot_exclusion_mask_m": {
+      "x_range": [
+        -0.35,
+        0.35
+      ],
+      "y_range": [
+        -0.28,
+        0.28
+      ]
+    }
+  },
+  "processing_config": {
+    "sensor": "3D GPU LiDAR (16 channels, vertical FOV [-15°, +15°], range 0.30-20.0m)",
+    "target_frame": "base_stabilized",
+    "roll_pitch_compensation": true,
+    "main_slice": {
+      "min_height_m": 0.3,
+      "max_height_m": 0.8,
+      "thickness_m": 0.5
+    },
+    "low_obstacle_filter": {
+      "enabled": true,
+      "low_min_height_m": 0.1,
+      "low_max_height_m": 0.3,
+      "min_step_height_m": 0.09,
+      "max_traversable_slope_deg": 38.0,
+      "max_step_eval_range_m": 3.2,
+      "despeckle_min_cluster_bins": 3,
+      "despeckle_max_bin_diff_m": 0.18
+    },
+    "scan_output": {
+      "num_beams": 720,
+      "angular_increment_deg": 0.5,
+      "rate_hz": 10.0,
+      "qos": "RELIABLE (depth 10, compatible with Nav2 costmap & SLAM)"
+    }
+  },
+  "ros_parameters_snapshot": {
+    "stabilized_frame_publisher": "unavailable"
+  },
+  "summary_metrics": {
+    "duration_s": 156.678,
+    "path_length_m": 70.1382,
+    "mean_traversal_speed_mps": 0.4477,
+    "section_completed": true,
+    "last_nav_status": "SUCCEEDED",
+    "phantom_obstacle_ratio": 0.193,
+    "stuck_hesitation_ratio": 0.0205,
+    "mobility_fraction": 0.9795,
+    "roll_deg": {
+      "mean": -0.0618,
+      "std": 5.8773,
+      "min": -15.3923,
+      "p50": -0.0,
+      "p95": 13.4764,
+      "max": 16.3484,
+      "max_abs": 16.3484
+    },
+    "pitch_deg": {
+      "mean": -0.5888,
+      "std": 4.0876,
+      "min": -14.9008,
+      "p50": -0.0,
+      "p95": 6.19,
+      "max": 14.29,
+      "max_abs": 14.9008
+    },
+    "total_tilt_deg": {
+      "mean": 4.8184,
+      "std": 5.3277,
+      "min": 0.0,
+      "p50": 2.5577,
+      "p95": 15.0625,
+      "max": 16.3996,
+      "max_abs": 16.3996
+    },
+    "linear_velocity_mps": {
+      "mean": 0.466,
+      "std": 0.2397,
+      "min": -0.3091,
+      "p50": 0.6,
+      "p95": 0.6,
+      "max": 0.6,
+      "max_abs": 0.6
+    },
+    "front_scan_min_range_m": {
+      "mean": 2.0038,
+      "std": 0.8548,
+      "min": 0.5577,
+      "p50": 1.8389,
+      "p95": 3.3259,
+      "max": 5.6578,
+      "max_abs": 5.6578
+    },
+    "close_beams_lt_1_5m": {
+      "mean": 136.2925,
+      "std": 119.7405,
+      "min": 0,
+      "p50": 116.0,
+      "p95": 430.0,
+      "max": 510,
+      "max_abs": 510
+    }
+  },
+  "notes": "",
+  "csv_file": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_sandbox/logs/block4_stabilized_20261022_171813_timeseries.csv"
+}

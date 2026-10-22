@@ -1,0 +1,57 @@
+{
+  "experiment": "Chapter 4 - §4.2 Block 2A (Cold Start with Saved Posegraph & Short Goal)",
+  "run_id": "block2a_run2_shelter_012.7_20261022_175743",
+  "run_num": 2,
+  "timestamp_iso": "2026-10-22T17:58:20.127861",
+  "map_name": "shelter_012.7",
+  "hardware": {
+    "hostname": "oleksandr-ThinkPad",
+    "processor": "x86_64"
+  },
+  "initialization_metrics": {
+    "t_from_slam_start_to_first_map_tf_s": 2.265,
+    "t_from_slam_start_to_first_pose_s": 1.581,
+    "t_from_slam_start_to_first_map_grid_s": 1.454,
+    "t_first_map_tf_s": 9.619,
+    "t_first_pose_topic_s": 8.936,
+    "t_first_map_grid_s": 8.809,
+    "init_window_sec": 5.0,
+    "init_samples_count": 25,
+    "initial_pose_x_m": {
+      "mean": 0.0,
+      "std": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "span": 0.0
+    },
+    "initial_pose_y_m": {
+      "mean": -0.0,
+      "std": 0.0,
+      "min": -0.0,
+      "max": -0.0,
+      "span": 0.0
+    },
+    "initial_pose_yaw_deg": {
+      "mean": -0.00035,
+      "std": 0.00074,
+      "min": -0.00183,
+      "max": 0.00069,
+      "span": 0.00252
+    },
+    "scan_map_match_ratio": 0.9889,
+    "scan_valid_beams": 360
+  },
+  "short_goal_metrics": {
+    "t_first_move_s": 24.973,
+    "total_duration_s": 36.613,
+    "path_length_m": 3.3619,
+    "final_pose": {
+      "x_m": -0.0379,
+      "y_m": 2.9488,
+      "yaw_deg": 4.7
+    },
+    "last_nav_status": "SUCCEEDED"
+  },
+  "notes": "",
+  "csv_file": "/home/oleksandr/ros2_ws/src/smart_robotics/smart_sandbox/logs/block2a_run2_shelter_012.7_20261022_175743_timeseries.csv"
+}
