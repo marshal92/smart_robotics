@@ -10,7 +10,7 @@ def generate_launch_description():
     use_sim_time = 'false'
     pkg_smart_master = FindPackageShare('smart_master')
 
-    use_arm_arg = DeclareLaunchArgument('use_arm', default_value='true')
+    use_arm_arg = DeclareLaunchArgument('use_arm', default_value='false')
     use_arm = LaunchConfiguration('use_arm')
 
     # Global URDF (Master Assembly)

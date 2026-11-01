@@ -188,6 +188,20 @@ class MissionManager(Node):
             client_shadow.call_async(req)
         self.get_logger().info(f"Shadow Teleop set to: {'ON' if is_active else 'OFF'}")
 
+    def _native_set_max_speed(self, speed_val: float):
+        client_ctrl = self.create_client(SetParameters, '/controller_server/set_parameters')
+        if client_ctrl.wait_for_service(timeout_sec=2.0):
+            req = SetParameters.Request()
+            param = Parameter(
+                name='FollowPath.vx_max',
+                value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE, double_value=float(speed_val))
+            )
+            req.parameters.append(param)
+            client_ctrl.call_async(req)
+            self.get_logger().info(f"Updated Nav2 FollowPath.vx_max to: {speed_val:.2f} m/s")
+        else:
+            self.get_logger().warn("Could not set speed: /controller_server/set_parameters not available")
+
     def _native_radiation_mapper_params(self, map_path, is_recording):
         client_mapper = self.create_client(SetParameters, '/radiation_mapper/set_parameters')
         if client_mapper.wait_for_service(timeout_sec=2.0):
@@ -316,6 +330,12 @@ class MissionManager(Node):
             threading.Thread(target=self._native_set_radiation, args=(True,), daemon=True).start()
         elif action == 'rad_off':
             threading.Thread(target=self._native_set_radiation, args=(False,), daemon=True).start()
+        elif action == 'set_speed':
+            try:
+                speed_val = float(cmd_parts[1]) if len(cmd_parts) > 1 else 0.8
+                threading.Thread(target=self._native_set_max_speed, args=(speed_val,), daemon=True).start()
+            except ValueError:
+                self.get_logger().error(f"Invalid speed value in command: '{cmd}'")
         else:
             self.get_logger().error(f"Unknown system command: '{cmd}'")
 

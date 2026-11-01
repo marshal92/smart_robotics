@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import * as ROSLIB from 'roslib'
+import { pubSmartCommand } from '../../../services/rosConnection'
 
 export function useNavSpeed() {
   const maxSpeed = ref(0.8)
@@ -8,33 +8,13 @@ export function useNavSpeed() {
   function setMaxSpeed(ros, speed) {
     if (!ros) return
 
+    const val = parseFloat(speed)
+    if (isNaN(val)) return
+
     isSettingSpeed.value = true
-    const setParamClient = new ROSLIB.Service({
-      ros: ros,
-      name: '/controller_server/set_parameters',
-      serviceType: 'rcl_interfaces/srv/SetParameters'
-    })
-
-    const request = {
-      parameters: [
-        {
-          name: 'FollowPath.vx_max',
-          value: {
-            type: 3, // DOUBLE_TYPE
-            double_value: parseFloat(speed)
-          }
-        }
-      ]
-    }
-
-    setParamClient.callService(request, (result) => {
-      console.log('Successfully updated Nav2 vx_max to:', speed, result)
-      maxSpeed.value = speed
-      isSettingSpeed.value = false
-    }, (error) => {
-      console.warn('Failed to update Nav2 parameter (Navigation might not be running yet):', error)
-      isSettingSpeed.value = false
-    })
+    pubSmartCommand('system', `set_speed:${val.toFixed(2)}`)
+    maxSpeed.value = val
+    isSettingSpeed.value = false
   }
 
   return {
