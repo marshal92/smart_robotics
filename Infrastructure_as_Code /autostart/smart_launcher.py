@@ -378,11 +378,19 @@ class SmartControlApp(QMainWindow):
 
         def runner():
             # 1. Start robot script on the robot in background tmux
+            # Run via 'bash' so the script does not need the exec bit on the robot.
+            # BatchMode: fail fast instead of hanging on a password prompt.
             ssh_cmd = (
-                f"ssh -o ConnectTimeout=5 {ROBOT_USER}@{ROBOT_IP} "
-                f"\"bash -l -c '{ROBOT_SSH_SCRIPT} {use_arm} || ~/start_robot.sh {use_arm} || ~/robot.sh {use_arm}'\""
+                f"ssh -o ConnectTimeout=5 -o BatchMode=yes {ROBOT_USER}@{ROBOT_IP} "
+                f"\"bash -l -c 'bash {ROBOT_SSH_SCRIPT} {use_arm}'\""
             )
-            subprocess.run(ssh_cmd, shell=True)
+            res = subprocess.run(ssh_cmd, shell=True, capture_output=True, text=True)
+            if res.returncode != 0:
+                err = (res.stderr or res.stdout).strip().splitlines()
+                self.signals.status_update.emit(
+                    f"ERROR: robot start failed via SSH: {err[-1] if err else res.returncode}"
+                )
+                return
 
             self.signals.status_update.emit("Starting local smart_server...")
             # 2. Start local server script
