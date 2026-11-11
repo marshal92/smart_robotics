@@ -81,7 +81,8 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('smart_server'), 'launch', 'server.launch.py'])),
         launch_arguments={
             'world': LaunchConfiguration('world'),
-            'use_sim_time': use_sim_time
+            'use_sim_time': use_sim_time,
+            'use_arm': LaunchConfiguration('use_arm')
         }.items()
     )
     

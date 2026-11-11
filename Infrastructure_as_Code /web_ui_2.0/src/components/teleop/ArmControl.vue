@@ -1,6 +1,17 @@
 <template>
   <div class="arm-control">
     <div class="arm-inner">
+      <div class="arm-backend-row">
+        <button class="cmd-btn border-btn b-orange compact-btn" @click="pubSmartCommand('system', 'arm_on')">
+          MoveIt ON
+        </button>
+        <button class="cmd-btn border-btn b-red compact-btn" @click="pubSmartCommand('system', 'arm_off')">
+          MoveIt OFF
+        </button>
+        <button class="cmd-btn border-btn b-blue compact-btn" @click="unfoldArm">
+          Unfold
+        </button>
+      </div>
       
       <div class="joint-list">
         <div v-for="(limit, index) in jointLimits" :key="index" class="joint-row">
@@ -69,7 +80,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import * as ROSLIB from 'roslib'
-import { getRosInstance } from '../../services/rosConnection'
+import { getRosInstance, pubSmartCommand } from '../../services/rosConnection'
 import { useRosStore } from '../../stores/rosStore'
 
 const store = useRosStore()
@@ -180,6 +191,14 @@ const syncSlidersToRobot = () => {
   }
 }
 
+const unfoldArm = () => {
+  const standRad = [0.0, 1.0, -1.0, 0.0, 0.785, 0.0]
+  for (let i = 0; i < 6; i++) {
+    targetJointAnglesDeg.value[i] = Math.round((standRad[i] * 180.0 / Math.PI) * 10) / 10
+  }
+  executeJoints(true, 3.0)
+}
+
 const stepJoint = (index, degStep) => {
   for (let i = 0; i < 6; i++) {
     let deg = currentJointAnglesRad.value[i] * 180.0 / Math.PI
@@ -271,6 +290,12 @@ const deletePoseIdx = (idx) => {
   display: flex;
   flex-direction: column;
   gap: 15px;
+}
+
+.arm-backend-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
 }
 
 .joint-list {

@@ -49,36 +49,83 @@ class WaypointManager(Node):
         self.publish_markers()
 
     def command_cb(self, msg):
+        if msg.target_system not in ('waypoints', 'nav'):
+            return
+        if msg.target_system == 'nav' and msg.command != 'go_to_named':
+            return
+
         payload = {}
         if msg.payload_json:
-            try: payload = json.loads(msg.payload_json)
-            except: pass
+            try:
+                payload = json.loads(msg.payload_json)
+            except Exception as e:
+                self.get_logger().error(f"Invalid JSON in SmartCommand ({msg.target_system}:{msg.command}): {e}")
+                return
+            if not isinstance(payload, dict):
+                self.get_logger().error(f"Expected JSON object in SmartCommand ({msg.target_system}:{msg.command}), got {type(payload).__name__}")
+                return
 
-        name = payload.get("name", "").lower().replace(" ", "_")
+        raw_name = payload.get("name", "")
+        if not isinstance(raw_name, str):
+            raw_name = str(raw_name)
+        name = raw_name.strip().lower().replace(" ", "_")
 
         # --- PROCESSING COMMANDS FOR THE DATABASE---
         if msg.target_system == 'waypoints':
             action = msg.command
+            if not name:
+                self.get_logger().warn(f"Empty waypoint name for command '{action}'. Ignored.")
+                return
             
             if action == "save":
-                tab = payload.get("tab", "global") 
+                tab = str(payload.get("tab", "global"))
                 
                 # If an array of points arrived, save it as a route
                 if "points" in payload:
+                    pts = payload["points"]
+                    if not isinstance(pts, list) or len(pts) == 0:
+                        self.get_logger().error("Invalid or empty 'points' array for route save.")
+                        return
+                    clean_pts = []
+                    for p in pts:
+                        if not isinstance(p, (list, tuple)) or len(p) < 2:
+                            self.get_logger().error(f"Invalid point in route save: {p}")
+                            return
+                        try:
+                            px = float(p[0])
+                            py = float(p[1])
+                            pyaw = float(p[2]) if len(p) > 2 else 0.0
+                        except (ValueError, TypeError) as e:
+                            self.get_logger().error(f"Non-numeric coordinate in route save: {e}")
+                            return
+                        if not (math.isfinite(px) and math.isfinite(py) and math.isfinite(pyaw)):
+                            self.get_logger().error("Non-finite coordinate in route save.")
+                            return
+                        clean_pts.append([px, py, pyaw])
                     self.waypoints[name] = {
                         "type": "route",
                         "tab": tab,
-                        "points": payload["points"]
+                        "points": clean_pts
                     }
-                    self.get_logger().info(f"Route '{name.upper()}' saved with {len(payload['points'])} points.")
+                    self.get_logger().info(f"Route '{name.upper()}' saved with {len(clean_pts)} points.")
                 # Otherwise, save as a single point
                 else:
+                    try:
+                        px = float(payload.get("x", 0.0))
+                        py = float(payload.get("y", 0.0))
+                        pyaw = float(payload.get("yaw", 0.0))
+                    except (ValueError, TypeError) as e:
+                        self.get_logger().error(f"Non-numeric coordinate in waypoint save: {e}")
+                        return
+                    if not (math.isfinite(px) and math.isfinite(py) and math.isfinite(pyaw)):
+                        self.get_logger().error("Non-finite coordinate in waypoint save.")
+                        return
                     self.waypoints[name] = {
                         "type": "point",
                         "tab": tab,
-                        "x": float(payload.get("x", 0.0)),
-                        "y": float(payload.get("y", 0.0)),
-                        "yaw": float(payload.get("yaw", 0.0))
+                        "x": px,
+                        "y": py,
+                        "yaw": pyaw
                     }
                     self.get_logger().info(f"Waypoint '{name.upper()}' saved.")
                 
@@ -96,7 +143,11 @@ class WaypointManager(Node):
         elif msg.target_system == 'nav' and msg.command == 'go_to_named':
             if name in self.waypoints:
                 wp = self.waypoints[name]
-                laps = max(1, int(payload.get("laps", 1)))
+                try:
+                    laps = min(100, max(1, int(payload.get("laps", 1))))
+                except (ValueError, TypeError):
+                    self.get_logger().error(f"Invalid 'laps' value in go_to_named: {payload.get('laps')}")
+                    return
                 cmd_msg = SmartCommand()
                 cmd_msg.target_system = 'nav'
                 

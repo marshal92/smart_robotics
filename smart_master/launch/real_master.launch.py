@@ -5,6 +5,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+from launch.conditions import IfCondition
 
 def generate_launch_description():
     use_sim_time = 'false'
@@ -40,6 +41,16 @@ def generate_launch_description():
         }]
     )
 
+    # C++ bridge for the physical manipulator (ESP32 <-> ROS 2 Action & Topic)
+    arm_bridge_node = Node(
+        condition=IfCondition(use_arm),
+        package='smart_plugins',
+        executable='trajectory_bridge',
+        name='trajectory_bridge',
+        output='screen',
+        parameters=[{'use_sim_time': False}]
+    )
+
     # Robot
     hardware_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('ugv_tracked_bringup'), 'launch', 'hardware.launch.py']))
@@ -50,16 +61,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('smart_control'), 'launch', 'control_core.launch.py'])),
         launch_arguments={
             'use_sim_time': use_sim_time,
-            'require_heartbeat': 'false' # Поставь 'true', если Пульс с сервера уже стабильно долетает
-        }.items()
-    )
-
-    # Subsystems (Radiation and Reflexes)
-    radiation_bringup_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('smart_radiation'), 'launch', 'radiation_bringup.launch.py'])),
-        launch_arguments={
-            'use_sim_time': 'false',
-            'use_virtual_geiger': 'true'
+            'require_heartbeat': 'false' # Set to 'true' once server heartbeat is active
         }.items()
     )
 
@@ -67,7 +69,7 @@ def generate_launch_description():
         use_arm_arg,
         hardware_launch,
         control_core_launch,
-        radiation_bringup_launch,
         rsp_node,
-        jsp_node
+        jsp_node,
+        arm_bridge_node
     ])

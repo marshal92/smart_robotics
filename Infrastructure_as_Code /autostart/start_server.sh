@@ -1,12 +1,13 @@
 #!/bin/bash
 
 SESSION="smart_server"
-IP_ROBOTA="192.168.31.100" # Проверь, чтобы был актуальный
+IP_ROBOTA="192.168.31.100"
+USE_ARM=${1:-false}
 
 tmux kill-session -t $SESSION 2>/dev/null
 tmux new-session -d -s $SESSION
 
-# Формируем команду Zenoh
+# Build Zenoh bridge command
 ZENOH_CMD="zenoh-bridge-dds -e tcp/$IP_ROBOTA:7447 --no-multicast-scouting \
 \
 --allow '^rt/cmd_vel$' \
@@ -28,46 +29,27 @@ ZENOH_CMD="zenoh-bridge-dds -e tcp/$IP_ROBOTA:7447 --no-multicast-scouting \
 --allow '^rt/map_updates$' \
 --allow '^rt/radiation_map$' \
 --allow '^rt/radiation_image/compressed$' \
+--allow '^rt/radiation/status$' \
 --allow '^rt/camera/image_raw/compressed$' \
 --allow '^rt/plan$' \
+--allow '^rt/arm_joint_states$' \
+--allow '^rt/arm_controller/joint_trajectory$' \
+--allow '^.*/arm_controller/follow_joint_trajectory/.*$' \
 \
 --allow '^rt/rosout$'"
 
-# --allow '^rt/scan$' \
-# --allow '^rt/odom$' \
-# --allow '^rt/fsm_status$'\
-# --allow '^rt/current_dose_rate$' \
-# --allow '^rt/payload/.*' \
-# --allow '^rt/global_costmap/costmap$' \
-# --allow '^rt/global_costmap/costmap_updates$' \
-# --allow '^rt/local_costmap/costmap$' \
-# --allow '^rt/local_costmap/costmap_updates$' \
-# --allow '^rt/waypoint
-# --allow '^rt/operator_command$' \
-# --allow '^rt/system_command$' \
-# --allow '^rt/tactical_command$' \
-# --allow '^rt/navigate_through_poses/.*' \
-# --allow '^rq/navigate_through_poses/.*' \
-# --allow '^rr/navigate_through_poses/.*' \
-
-# Окно 0: Zenoh Bridge (Связь с роботом)
+# Window 0: Zenoh Bridge (Connection to robot)
 tmux rename-window -t $SESSION:0 'Zenoh_Client'
 tmux send-keys -t $SESSION:0 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' C-m
 tmux send-keys -t $SESSION:0 "$ZENOH_CMD" C-m
 
-# Окно 1: ROSBridge (Для твоего HTML-интерфейса)
-#tmux new-window -t $SESSION:1 -n 'ROS_Bridge'
-#tmux send-keys -t $SESSION:1 'source /opt/ros/jazzy/setup.bash' C-m
-#tmux send-keys -t $SESSION:1 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' C-m
-#tmux send-keys -t $SESSION:1 'ros2 run rosbridge_server rosbridge_websocket' C-m
-
-# Окно 2: Твои локальные узлы (Оркестратор, Тень и т.д.)
+# Window 2: Local server nodes (Orchestrator, Shadow, Web UI, etc.)
 tmux new-window -t $SESSION:2 -n 'Master_Launch'
 tmux send-keys -t $SESSION:2 'source ~/ros2_ws/install/setup.bash' C-m
 tmux send-keys -t $SESSION:2 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' C-m
 tmux send-keys -t $SESSION:2 'sleep 2' C-m
-tmux send-keys -t $SESSION:2 'ros2 launch smart_server server.launch.py' C-m
+tmux send-keys -t $SESSION:2 "ros2 launch smart_server server.launch.py use_arm:=$USE_ARM" C-m
 
-echo " Серверная станция запущена!"
-echo " Web интерфейс доступен"
-echo " Логи сервера: tmux attach -t $SESSION"
+echo "Server station started (use_arm=$USE_ARM)!"
+echo "Web interface is available on port 8080"
+echo "Server logs: tmux attach -t $SESSION"

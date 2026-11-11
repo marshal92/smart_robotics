@@ -33,6 +33,7 @@ class NavCoordinator(Node):
         self.sw_min_end_dist = 1.80 # м — минимальная дистанция от робота до конца окна (должна быть > threshold_to_consider=1.4)
         self.resume_snapshot = None
         self.nav_paused = False
+        self.cancel_requested = False
 
         # Позиция робота в map (обновляется из лёгкого /pose от SLAM и фидбека Nav2 без тяжёлого /tf)
         self.robot_x = None
@@ -128,16 +129,26 @@ class NavCoordinator(Node):
                 self.route_accumulator.clear()
                 self.active_task = None
                 self.reset_sliding_window()
+                self.cancel_requested = True
             return
 
         # 2. Тактические команды навигации
         if msg.target_system == 'nav':
-            action = msg.command.lower()
+            action = msg.command.strip().lower()
+            if action == 'go_to_named':
+                # go_to_named обрабатывается в waypoint_manager
+                return
             
             payload = {}
             if msg.payload_json:
-                try: payload = json.loads(msg.payload_json)
-                except Exception as e: self.get_logger().error(f"JSON Error: {e}")
+                try:
+                    payload = json.loads(msg.payload_json)
+                except Exception as e:
+                    self.get_logger().error(f"JSON Error in nav:{action}: {e}")
+                    return
+                if not isinstance(payload, dict):
+                    self.get_logger().error(f"Expected JSON object in nav:{action}, got {type(payload).__name__}")
+                    return
 
             # Cancel and RTH
             if action == "cancel":
@@ -146,11 +157,14 @@ class NavCoordinator(Node):
                 self.nav_queue.clear()
                 self.reset_sliding_window()
                 self.nav_paused = False
-                self.nav_queue.append({'type': 'cancel'})
+                self.cancel_requested = True
                 self.active_task = None
                 return
 
             if action == "resume":
+                if self.current_fsm_state in ["WARNING", "EVACUATING"]:
+                    self.get_logger().warn(f"Cannot RESUME while safety FSM is in {self.current_fsm_state}.")
+                    return
                 if self.sw_active:
                     self.get_logger().info("Route is already active.")
                     return
@@ -189,10 +203,21 @@ class NavCoordinator(Node):
                 
             if action == "rth":
                 self.get_logger().info("Command RTH received. Returning to base!")
-                goal_pose = self._create_pose(payload.get("x", 0.0), payload.get("y", 0.0), 0.0)
+                try:
+                    rx = float(payload.get("x", 0.0))
+                    ry = float(payload.get("y", 0.0))
+                    ryaw = float(payload.get("yaw", 0.0))
+                except (ValueError, TypeError) as e:
+                    self.get_logger().error(f"Invalid RTH coordinates: {e}")
+                    return
+                if not (math.isfinite(rx) and math.isfinite(ry) and math.isfinite(ryaw)):
+                    self.get_logger().error("Non-finite RTH coordinates.")
+                    return
+                goal_pose = self._create_pose(rx, ry, ryaw)
                 self.nav_queue.clear()
                 self.reset_sliding_window()
                 self.nav_paused = False
+                self.cancel_requested = True
                 self.nav_queue.append({'type': 'rth', 'pose': goal_pose})
                 return
 
@@ -203,29 +228,65 @@ class NavCoordinator(Node):
 
             # Одиночная поездка в точку
             if action in ["go_to", "go_to_with_bt"]:
+                if "x" not in payload or "y" not in payload:
+                    self.get_logger().error(f"Missing 'x' or 'y' in nav:{action}")
+                    return
+                try:
+                    gx = float(payload["x"])
+                    gy = float(payload["y"])
+                    gyaw = float(payload.get("yaw", 0.0))
+                    laps = min(100, max(1, int(payload.get("laps", 1))))
+                except (ValueError, TypeError) as e:
+                    self.get_logger().error(f"Invalid numeric parameter in nav:{action}: {e}")
+                    return
+                if not (math.isfinite(gx) and math.isfinite(gy) and math.isfinite(gyaw)):
+                    self.get_logger().error(f"Non-finite coordinates in nav:{action}")
+                    return
                 self.nav_paused = False
-                laps = max(1, int(payload.get("laps", 1)))
-                name = payload.get("name", "point")
+                name = str(payload.get("name", "point"))
+                bt_val = str(payload.get("bt", ""))
                 for lap in range(1, laps + 1):
-                    goal_pose = self._create_pose(payload.get("x", 0.0), payload.get("y", 0.0), payload.get("yaw", 0.0))
-                    task = {'type': 'go_to', 'pose': goal_pose, 'bt': payload.get("bt", ""), 'lap': lap, 'total_laps': laps, 'name': name}
+                    goal_pose = self._create_pose(gx, gy, gyaw)
+                    task = {'type': 'go_to', 'pose': goal_pose, 'bt': bt_val, 'lap': lap, 'total_laps': laps, 'name': name}
                     self.active_task = task
                     self.nav_queue.append(task)
                 self.get_logger().info(f"Queued point '{name}' (laps={laps}). Queue size: {len(self.nav_queue)}")
 
             # Массив точек (разворачиваем все круги в единый маршрут для скользящего окна)
-            elif action == "waypoints":
+            elif action in ["waypoints", "patrol", "follow_route"]:
                 pts = payload.get("points", [])
-                if not pts:
+                if not isinstance(pts, list) or not pts or len(pts) > 500:
+                    self.get_logger().error("Invalid, empty, or oversized 'points' list in waypoints command.")
                     return
+                try:
+                    laps = min(100, max(1, int(payload.get("laps", 1))))
+                except (ValueError, TypeError) as e:
+                    self.get_logger().error(f"Invalid 'laps' in waypoints command: {e}")
+                    return
+                parsed_pts = []
+                for p in pts:
+                    if not isinstance(p, (list, tuple)) or len(p) < 2:
+                        self.get_logger().error(f"Malformed waypoint entry: {p}")
+                        return
+                    try:
+                        px = float(p[0])
+                        py = float(p[1])
+                        pyaw = float(p[2]) if len(p) > 2 else 0.0
+                    except (ValueError, TypeError) as e:
+                        self.get_logger().error(f"Non-numeric waypoint coordinate: {e}")
+                        return
+                    if not (math.isfinite(px) and math.isfinite(py) and math.isfinite(pyaw)):
+                        self.get_logger().error("Non-finite waypoint coordinate.")
+                        return
+                    parsed_pts.append((px, py, pyaw))
+
                 self.nav_paused = False
-                laps = max(1, int(payload.get("laps", 1)))
-                name = payload.get("name", "route")
+                name = str(payload.get("name", "route"))
                 all_poses = []
                 lap_nums = []
                 for lap in range(1, laps + 1):
-                    for p in pts:
-                        pose = self._create_pose(p[0], p[1], p[2] if len(p) > 2 else 0.0)
+                    for px, py, pyaw in parsed_pts:
+                        pose = self._create_pose(px, py, pyaw)
                         if all_poses:
                             prev = all_poses[-1].pose.position
                             cur = pose.pose.position
@@ -238,17 +299,30 @@ class NavCoordinator(Node):
                     'type': 'waypoints',
                     'poses': all_poses,
                     'lap_nums': lap_nums,
-                    'bt': payload.get("bt", ""),
+                    'bt': str(payload.get("bt", "")),
                     'total_laps': laps,
                     'name': name
                 }
                 self.active_task = task
                 self.nav_queue.append(task)
-                self.get_logger().info(f"Queued route '{name}' ({len(pts)} pts x {laps} laps -> {len(all_poses)} waypoints). Queue size: {len(self.nav_queue)}")
+                self.get_logger().info(f"Queued route '{name}' ({len(parsed_pts)} pts x {laps} laps -> {len(all_poses)} waypoints). Queue size: {len(self.nav_queue)}")
 
             # Добавить ОДНУ точку в локальный маршрут (для ручного построения)
             elif action == "add_to_route":
-                pose = self._create_pose(payload.get("x", 0.0), payload.get("y", 0.0), payload.get("yaw", 0.0))
+                if "x" not in payload or "y" not in payload:
+                    self.get_logger().error("Missing 'x' or 'y' in add_to_route")
+                    return
+                try:
+                    px = float(payload["x"])
+                    py = float(payload["y"])
+                    pyaw = float(payload.get("yaw", 0.0))
+                except (ValueError, TypeError) as e:
+                    self.get_logger().error(f"Invalid coordinate in add_to_route: {e}")
+                    return
+                if not (math.isfinite(px) and math.isfinite(py) and math.isfinite(pyaw)):
+                    self.get_logger().error("Non-finite coordinate in add_to_route")
+                    return
+                pose = self._create_pose(px, py, pyaw)
                 self.route_accumulator.append(pose)
                 self.get_logger().info(f"Point added to route. Total points in queue: {len(self.route_accumulator)}")
 
@@ -262,7 +336,7 @@ class NavCoordinator(Node):
                     'type': 'waypoints',
                     'poses': poses,
                     'lap_nums': [1] * len(poses),
-                    'bt': payload.get("bt", ""),
+                    'bt': str(payload.get("bt", "")),
                     'total_laps': 1,
                     'name': 'accumulated_route'
                 }
@@ -393,20 +467,25 @@ def main(args=None):
                 node.status_pub.publish(String(data=nav_state))
                 last_pub = time.time()
             
-            if node.nav_queue:
-                if node.nav_queue[0]['type'] == 'cancel':
-                    node.nav_queue.pop(0)
-                    node.reset_sliding_window()
-                    if nav_state == "MOVING":
-                        navigator.cancelTask()
-                        time.sleep(0.5)
-                    navigator.result_future = None
-                    nav_state = "CANCELED"
+            if node.cancel_requested:
+                node.cancel_requested = False
+                node.reset_sliding_window()
+                if nav_state == "MOVING" or navigator.result_future is not None:
+                    navigator.cancelTask()
+                    time.sleep(0.5)
+                navigator.result_future = None
+                nav_state = "CANCELED"
+                if not node.nav_queue:
                     node.active_task = None
-                    continue
 
+            if node.nav_queue:
                 if nav_state == "MOVING" or node.sw_active or node.nav_paused:
                     continue 
+
+                # Для обычных задач (не rth) ждём, пока FSM безопасности перейдёт в разрешённое состояние
+                next_cmd = node.nav_queue[0]['type']
+                if next_cmd != 'rth' and node.current_fsm_state not in ["NORMAL", "DISABLED", "UNKNOWN"]:
+                    continue
 
                 nav_is_alive = navigator.nav_to_pose_client.wait_for_server(timeout_sec=0.1)
                 if not nav_is_alive:

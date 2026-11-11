@@ -1,5 +1,5 @@
-#ifndef SMART_PLUGINS__RADIATION_LAYER_HPP_
-#define SMART_PLUGINS__RADIATION_LAYER_HPP_
+#ifndef SMART_RADIATION_PLUGINS__RADIATION_LAYER_HPP_
+#define SMART_RADIATION_PLUGINS__RADIATION_LAYER_HPP_
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_costmap_2d/layer.hpp"
@@ -7,7 +7,7 @@
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include <mutex>
 
-namespace smart_plugins
+namespace smart_radiation_plugins
 {
 
 class RadiationLayer : public nav2_costmap_2d::Layer
@@ -35,8 +35,9 @@ private:
   std::mutex data_mutex_;
   bool need_bounds_update_;
   bool enabled_;
+  int max_cost_;
 };
 
-}  // namespace smart_plugins
+}  // namespace smart_radiation_plugins
 
 #endif

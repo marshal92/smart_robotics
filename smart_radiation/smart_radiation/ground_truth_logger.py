@@ -25,8 +25,13 @@ class GroundTruthLogger(Node):
         self.total_dose_accumulated = 0.0
         self.last_time = None
 
-        pkg_share = get_package_share_directory('smart_radiation')
-        src_dir = pkg_share.replace('install/smart_radiation/share/smart_radiation', 'src/smart_robotics/smart_radiation')
+        from pathlib import Path
+        pkg_root = Path(__file__).resolve().parent.parent
+        if not (pkg_root / 'maps').exists():
+            pkg_share = get_package_share_directory('smart_radiation')
+            src_dir = pkg_share
+        else:
+            src_dir = str(pkg_root)
         
         # Загружаем карту
         self._load_truth_map(src_dir)

@@ -132,11 +132,19 @@ def main():
 
     total_dose += 0.05 
 
+    from pathlib import Path
     from ament_index_python.packages import get_package_share_directory
     
-    pkg_share = get_package_share_directory('smart_radiation')
-    src_dir = pkg_share.replace('install/smart_radiation/share/smart_radiation', 'src/smart_robotics/smart_radiation')
-    save_dir = os.path.join(src_dir, 'maps')
+    env_dir = os.environ.get('SMART_RADIATION_MAPS_DIR', '').strip()
+    if env_dir:
+        save_dir = os.path.expanduser(env_dir)
+    else:
+        pkg_maps = Path(__file__).resolve().parent.parent / 'maps'
+        if pkg_maps.exists():
+            save_dir = str(pkg_maps)
+        else:
+            pkg_share = get_package_share_directory('smart_radiation')
+            save_dir = os.path.join(pkg_share, 'maps')
     os.makedirs(save_dir, exist_ok=True)
     
     # 1. NPY

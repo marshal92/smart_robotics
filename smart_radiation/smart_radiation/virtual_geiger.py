@@ -28,9 +28,9 @@ class VirtualGeigerWorker(Node):
 
     def load_truth_map(self, map_file_name):
         try:
-            pkg_share = get_package_share_directory('smart_radiation')
-            src_dir = pkg_share.replace('install/smart_radiation/share/smart_radiation', 'src/smart_robotics/smart_radiation')
-            base_dir = os.path.join(src_dir, 'maps')
+            from pathlib import Path
+            pkg_root = Path(__file__).resolve().parent.parent
+            base_dir = str(pkg_root / 'maps') if (pkg_root / 'maps').exists() else os.path.join(get_package_share_directory('smart_radiation'), 'maps')
             
             map_path = map_file_name if os.path.isabs(map_file_name) else os.path.join(base_dir, map_file_name)
             base_name = os.path.splitext(os.path.basename(map_path))[0]

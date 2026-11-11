@@ -224,8 +224,9 @@ global_costmap:
       plugins: ["static_layer", "obstacle_layer", "inflation_layer", "radiation_layer"]
       
       radiation_layer:
-        plugin: "smart_plugins::RadiationLayer"
+        plugin: "smart_radiation_plugins::RadiationLayer"
         radiation_topic: "/radiation_map"
+        max_cost: 220
    
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"

@@ -74,7 +74,11 @@ def generate_launch_description():
         package='smart_server',
         executable='twin_orchestrator',
         name='twin_orchestrator',
-        output='screen'
+        output='screen',
+        parameters=[{
+            'use_sim_time': False,
+            'worker_use_sim_time': ParameterValue(use_sim_time, value_type=bool)
+        }]
     )
 
     shadow_teleop_sim_node = Node(

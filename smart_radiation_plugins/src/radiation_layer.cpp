@@ -1,14 +1,14 @@
-#include "smart_plugins/radiation_layer.hpp"
+#include "smart_radiation_plugins/radiation_layer.hpp"
 #include "nav2_costmap_2d/costmap_math.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include <algorithm>
 
-PLUGINLIB_EXPORT_CLASS(smart_plugins::RadiationLayer, nav2_costmap_2d::Layer)
+PLUGINLIB_EXPORT_CLASS(smart_radiation_plugins::RadiationLayer, nav2_costmap_2d::Layer)
 
-namespace smart_plugins
+namespace smart_radiation_plugins
 {
 
-RadiationLayer::RadiationLayer() : need_bounds_update_(false), enabled_(false) {}
+RadiationLayer::RadiationLayer() : need_bounds_update_(false), enabled_(false), max_cost_(220) {}
 
 void RadiationLayer::onInitialize()
 {
@@ -16,7 +16,9 @@ void RadiationLayer::onInitialize()
   if (!node) throw std::runtime_error("Failed to lock node");
 
   declareParameter("radiation_topic", rclcpp::ParameterValue("/radiation_map"));
+  declareParameter("max_cost", rclcpp::ParameterValue(220));
   std::string topic = node->get_parameter(name_ + ".radiation_topic").as_string();
+  max_cost_ = std::clamp(static_cast<int>(node->get_parameter(name_ + ".max_cost").as_int()), 1, 252);
   
   rad_map_sub_ = node->create_subscription<nav_msgs::msg::OccupancyGrid>(
     topic, rclcpp::QoS(1).transient_local(),
@@ -24,7 +26,7 @@ void RadiationLayer::onInitialize()
 
   current_ = true;
   enabled_ = true;
-  RCLCPP_INFO(node->get_logger(), "===> RadiationLayer (STABLE: Max Superposition) Initialized!");
+  RCLCPP_INFO(node->get_logger(), "===> RadiationLayer (STABLE: Max Superposition, C_max=%d) Initialized!", max_cost_);
 }
 
 void RadiationLayer::mapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
@@ -88,7 +90,7 @@ void RadiationLayer::updateCosts(
       int8_t rad_value = latest_rad_map_->data[rad_y * width + rad_x];
       if (rad_value <= 0) continue;
 
-      unsigned char rad_cost = static_cast<unsigned char>((rad_value * 220) / 100);
+      unsigned char rad_cost = static_cast<unsigned char>((rad_value * max_cost_) / 100);
 
       unsigned char final_cost = std::max(current_cost, rad_cost);
       
@@ -104,4 +106,4 @@ void RadiationLayer::reset()
   need_bounds_update_ = true;
 }
 
-} // namespace smart_plugins
+} // namespace smart_radiation_plugins

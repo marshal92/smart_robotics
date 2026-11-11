@@ -7,50 +7,19 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(nav2_costmap_2d REQUIRED)
-find_package(nav2_core REQUIRED)
-find_package(pluginlib REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(trajectory_msgs REQUIRED)
+find_package(control_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(smart_interfaces REQUIRED)
 find_package(nlohmann_json REQUIRED)
-find_package(std_srvs REQUIRED)
-
-add_library(smart_plugins_core SHARED
-  src/radiation_layer.cpp
-)
-
-target_include_directories(smart_plugins_core PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-
-ament_target_dependencies(smart_plugins_core
-  rclcpp
-  nav2_costmap_2d
-  nav2_core
-  pluginlib
-  std_msgs
-  geometry_msgs
-  nav_msgs
-)
-
-pluginlib_export_plugin_description_file(nav2_costmap_2d plugins.xml)
-
-add_executable(alara_speed_reflex_node src/alara_speed_reflex.cpp)
-ament_target_dependencies(alara_speed_reflex_node
-  rclcpp
-  nav_msgs
-  nav2_msgs
-  tf2_ros
-  geometry_msgs
-)
 
 add_executable(stabilized_frame_publisher_node src/stabilized_frame_publisher.cpp)
 ament_target_dependencies(stabilized_frame_publisher_node
@@ -62,23 +31,6 @@ ament_target_dependencies(stabilized_frame_publisher_node
   tf2_geometry_msgs
 )
 
-add_executable(radiation_mapper_node src/radiation_mapper_node.cpp)
-ament_target_dependencies(radiation_mapper_node
-  rclcpp
-  std_msgs
-  std_srvs
-  tf2_ros
-  geometry_msgs
-)
-
-add_executable(virtual_geiger_node src/virtual_geiger_node.cpp)
-ament_target_dependencies(virtual_geiger_node
-  rclcpp
-  std_msgs
-  tf2_ros
-  geometry_msgs
-)
-
 add_executable(telemetry_mux src/telemetry_mux.cpp)
 ament_target_dependencies(telemetry_mux 
   rclcpp 
@@ -88,18 +40,32 @@ ament_target_dependencies(telemetry_mux
   nlohmann_json
 )
 
-install(TARGETS smart_plugins_core alara_speed_reflex_node stabilized_frame_publisher_node telemetry_mux radiation_mapper_node virtual_geiger_node
+add_executable(nav_coordinator src/nav_coordinator.cpp)
+ament_target_dependencies(nav_coordinator
+  rclcpp
+  rclcpp_action
+  std_msgs
+  geometry_msgs
+  nav2_msgs
+  smart_interfaces
+  nlohmann_json
+)
+
+add_executable(trajectory_bridge src/trajectory_bridge.cpp)
+ament_target_dependencies(trajectory_bridge
+  rclcpp
+  rclcpp_action
+  std_msgs
+  sensor_msgs
+  trajectory_msgs
+  control_msgs
+)
+
+install(TARGETS stabilized_frame_publisher_node telemetry_mux nav_coordinator trajectory_bridge
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
-
-install(DIRECTORY include/ DESTINATION include)
-
-ament_export_include_directories(include)
-ament_export_libraries(smart_plugins_core)
-ament_export_dependencies(rclcpp nav2_costmap_2d nav2_core pluginlib std_msgs geometry_msgs nav_msgs)
-ament_export_libraries(smart_plugins_core)
 
 ament_package()

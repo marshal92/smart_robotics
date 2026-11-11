@@ -49,14 +49,6 @@ def generate_launch_description():
         }.items()
     )
 
-
-    radiation_bringup_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('smart_radiation'), 'launch', 'radiation_bringup.launch.py'])),
-        launch_arguments={
-            'map_path': 'explored_map.npy'
-        }.items()
-    )
-
     stabilized_frame_node = Node(
         package='smart_plugins',
         executable='stabilized_frame_publisher_node',
@@ -78,7 +70,8 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('smart_server'), 'launch', 'server.launch.py'])),
         launch_arguments={
             'world': LaunchConfiguration('world'),
-            'use_sim_time': use_sim_time
+            'use_sim_time': use_sim_time,
+            'use_arm': LaunchConfiguration('use_arm')
         }.items()
     )
     
@@ -87,7 +80,6 @@ def generate_launch_description():
         spawn_x_arg, spawn_y_arg, spawn_yaw_arg,
         simulation_launch,
         control_core_launch,
-        radiation_bringup_launch,
         stabilized_frame_node,
         server_launch
     ])

@@ -58,7 +58,7 @@ class SpatialProjectorNode(Node):
                 self.is_tracking = True
                 
                 stop_cmd = SmartCommand()
-                stop_cmd.target_system = 'system'
+                stop_cmd.target_system = 'tactical'
                 stop_cmd.command = 'stop'
                 self.cmd_pub.publish(stop_cmd)
                 

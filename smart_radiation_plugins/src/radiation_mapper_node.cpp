@@ -13,12 +13,15 @@
 #include <filesystem>
 #include <algorithm>
 
+#include <cstdlib>
+
 using std::placeholders::_1;
 using std::placeholders::_2;
 
 class RadiationMapperNode : public rclcpp::Node {
 public:
     RadiationMapperNode() : Node("radiation_mapper") {
+        this->declare_parameter("maps_dir", "");
         this->declare_parameter("map_path", "explored_map.npy");
         this->declare_parameter("is_recording", false);
         this->declare_parameter("width", 800);
@@ -27,6 +30,7 @@ public:
         this->declare_parameter("ox", -20.0);
         this->declare_parameter("oy", -20.0);
 
+        maps_dir_ = this->get_parameter("maps_dir").as_string();
         map_path_param_ = this->get_parameter("map_path").as_string();
         is_recording_ = this->get_parameter("is_recording").as_bool();
         width_ = this->get_parameter("width").as_int();
@@ -34,6 +38,12 @@ public:
         res_ = this->get_parameter("res").as_double();
         ox_ = this->get_parameter("ox").as_double();
         oy_ = this->get_parameter("oy").as_double();
+
+        default_width_ = width_;
+        default_height_ = height_;
+        default_res_ = res_;
+        default_ox_ = ox_;
+        default_oy_ = oy_;
 
         map_grid_.resize(width_ * height_, 0.0f);
         weight_grid_.resize(width_ * height_, 0.0f);
@@ -96,14 +106,19 @@ public:
     }
 
     ~RadiationMapperNode() {
-        save_map();
+        if (is_recording_ || map_dirty_) {
+            save_map();
+        }
     }
 
 private:
+    std::string maps_dir_;
     std::string map_path_param_;
     bool is_recording_;
     int width_, height_;
     double res_, ox_, oy_;
+    int default_width_, default_height_;
+    double default_res_, default_ox_, default_oy_;
     std::vector<float> map_grid_;
     std::vector<float> weight_grid_;
     bool map_dirty_ = false;
@@ -146,23 +161,47 @@ private:
     }
 
     rcl_interfaces::msg::SetParametersResult param_callback(const std::vector<rclcpp::Parameter> &params) {
+        bool path_changed = false;
+        std::string next_map_path = map_path_param_;
+        std::string next_maps_dir = maps_dir_;
+
+        for (const auto &param : params) {
+            if (param.get_name() == "maps_dir") {
+                next_maps_dir = param.as_string();
+                if (next_maps_dir != maps_dir_) {
+                    path_changed = true;
+                }
+            } else if (param.get_name() == "map_path") {
+                next_map_path = param.as_string();
+                if (next_map_path != map_path_param_) {
+                    path_changed = true;
+                }
+            }
+        }
+
+        if (path_changed) {
+            if (is_recording_ || map_dirty_) {
+                save_map();
+            }
+            maps_dir_ = next_maps_dir;
+            map_path_param_ = next_map_path;
+            resolve_paths(map_path_param_);
+            load_map();
+        }
+
         for (const auto &param : params) {
             if (param.get_name() == "is_recording") {
-                is_recording_ = param.as_bool();
+                bool new_rec = param.as_bool();
+                if (!new_rec && is_recording_ && map_dirty_) {
+                    save_map();
+                }
+                is_recording_ = new_rec;
                 if (is_recording_) {
                     enable_tf();
                     map_dirty_ = true;
                     timer_shm_update();
                 } else {
                     disable_tf();
-                }
-            } else if (param.get_name() == "map_path") {
-                std::string new_path = param.as_string();
-                if (new_path != map_path_param_) {
-                    save_map();
-                    map_path_param_ = new_path;
-                    resolve_paths(new_path);
-                    load_map();
                 }
             }
         }
@@ -172,12 +211,17 @@ private:
     }
 
     void resolve_paths(const std::string &filename) {
-        std::string base_dir = "/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps";
         std::filesystem::path p(filename);
         if (p.is_absolute()) {
             map_file_ = filename;
         } else {
-            map_file_ = base_dir + "/" + filename;
+            std::string base_dir = maps_dir_;
+            if (base_dir.empty()) {
+                const char* home = std::getenv("HOME");
+                base_dir = (home ? std::string(home) : "/home/oleksandr") + "/ros2_ws/src/smart_robotics/smart_radiation/maps";
+            }
+            std::filesystem::path md(base_dir);
+            map_file_ = (md / p).string();
         }
         
         std::string base_name = map_file_.substr(0, map_file_.find_last_of('.'));
@@ -210,66 +254,109 @@ private:
         out.write(reinterpret_cast<const char*>(data.data()), data.size() * sizeof(float));
     }
 
-    void load_npy(const std::string& filename, std::vector<float>& data) {
+    bool load_npy(const std::string& filename, std::vector<float>& data, int &out_height, int &out_width) {
         std::ifstream in(filename, std::ios::binary);
         if (!in) {
-            std::fill(data.begin(), data.end(), 0.0f);
-            return;
+            return false;
         }
         in.seekg(8); 
-        unsigned short header_len;
+        unsigned short header_len = 0;
         in.read(reinterpret_cast<char*>(&header_len), 2);
+        if (!in || header_len == 0) {
+            return false;
+        }
         
         std::string header(header_len, ' ');
         in.read(&header[0], header_len);
         
+        int parsed_h = out_height;
+        int parsed_w = out_width;
         size_t shape_pos = header.find("'shape': (");
         if (shape_pos != std::string::npos) {
             size_t comma_pos = header.find(",", shape_pos);
             size_t end_pos = header.find(")", comma_pos);
             if (comma_pos != std::string::npos && end_pos != std::string::npos) {
-                height_ = std::stoi(header.substr(shape_pos + 10, comma_pos - (shape_pos + 10)));
-                width_ = std::stoi(header.substr(comma_pos + 1, end_pos - (comma_pos + 1)));
-                data.resize(width_ * height_, 0.0f);
+                parsed_h = std::stoi(header.substr(shape_pos + 10, comma_pos - (shape_pos + 10)));
+                std::string w_str = header.substr(comma_pos + 1, end_pos - (comma_pos + 1));
+                w_str.erase(std::remove_if(w_str.begin(), w_str.end(), ::isspace), w_str.end());
+                if (!w_str.empty()) {
+                    parsed_w = std::stoi(w_str);
+                }
             }
         }
-        
+        if (parsed_h <= 0 || parsed_w <= 0) {
+            return false;
+        }
+        out_height = parsed_h;
+        out_width = parsed_w;
+        data.assign(static_cast<size_t>(out_width) * static_cast<size_t>(out_height), 0.0f);
         in.read(reinterpret_cast<char*>(data.data()), data.size() * sizeof(float));
+        return static_cast<bool>(in);
     }
 
     void load_map() {
+        width_ = default_width_;
+        height_ = default_height_;
+        res_ = default_res_;
+        ox_ = default_ox_;
+        oy_ = default_oy_;
+
         if (std::filesystem::exists(map_file_)) {
-            load_npy(map_file_, map_grid_);
-            if (std::filesystem::exists(meta_file_)) {
-                std::ifstream f(meta_file_);
-                nlohmann::json meta;
-                f >> meta;
-                if (meta.contains("width")) width_ = meta["width"];
-                if (meta.contains("height")) height_ = meta["height"];
-                if (meta.contains("ox")) ox_ = meta["ox"];
-                if (meta.contains("oy")) oy_ = meta["oy"];
-                if (meta.contains("res")) res_ = meta["res"];
-            }
-            if (std::filesystem::exists(weight_file_)) {
-                load_npy(weight_file_, weight_grid_);
+            int map_h = height_;
+            int map_w = width_;
+            if (load_npy(map_file_, map_grid_, map_h, map_w)) {
+                height_ = map_h;
+                width_ = map_w;
             } else {
-                std::fill(weight_grid_.begin(), weight_grid_.end(), 0.0f);
+                map_grid_.assign(static_cast<size_t>(width_) * static_cast<size_t>(height_), 0.0f);
+            }
+            if (std::filesystem::exists(meta_file_)) {
+                try {
+                    std::ifstream f(meta_file_);
+                    nlohmann::json meta;
+                    f >> meta;
+                    if (meta.contains("ox")) ox_ = meta["ox"];
+                    if (meta.contains("oy")) oy_ = meta["oy"];
+                    if (meta.contains("res")) res_ = meta["res"];
+                } catch (...) {
+                    RCLCPP_WARN(this->get_logger(), "Failed to parse meta file: %s", meta_file_.c_str());
+                }
+            }
+            bool weights_valid = false;
+            if (std::filesystem::exists(weight_file_)) {
+                int w_h = 0, w_w = 0;
+                std::vector<float> loaded_weights;
+                if (load_npy(weight_file_, loaded_weights, w_h, w_w)) {
+                    if (w_h == height_ && w_w == width_ && loaded_weights.size() == map_grid_.size()) {
+                        weight_grid_ = std::move(loaded_weights);
+                        weights_valid = true;
+                    } else {
+                        RCLCPP_WARN(
+                            this->get_logger(),
+                            "Weight file %s size (%dx%d) mismatches map (%dx%d). Recreating weights.",
+                            weight_file_.c_str(), w_w, w_h, width_, height_
+                        );
+                    }
+                }
+            }
+            if (!weights_valid) {
+                weight_grid_.assign(map_grid_.size(), 0.0f);
                 for (size_t i = 0; i < map_grid_.size(); ++i) {
                     if (map_grid_[i] > 0.0f) weight_grid_[i] = 1.0f;
                 }
             }
         } else {
-            map_grid_.resize(width_ * height_, 0.0f);
-            std::fill(map_grid_.begin(), map_grid_.end(), 0.0f);
-            weight_grid_.resize(width_ * height_, 0.0f);
-            std::fill(weight_grid_.begin(), weight_grid_.end(), 0.0f);
+            map_grid_.assign(static_cast<size_t>(width_) * static_cast<size_t>(height_), 0.0f);
+            weight_grid_.assign(static_cast<size_t>(width_) * static_cast<size_t>(height_), 0.0f);
         }
         save_meta();
         map_dirty_ = false;
         
         if (!std::filesystem::exists(log_file_)) {
             std::ofstream f(log_file_);
-            f << "Timestamp,X,Y,Dose\n";
+            if (f) {
+                f << "Timestamp,X,Y,Dose\n";
+            }
         }
     }
 
@@ -355,9 +442,7 @@ private:
         if (map_x_min >= map_x_max || map_y_min >= map_y_max) return;
         
         int mask_x_min = map_x_min - x_min;
-        int mask_x_max = mask_x_min + (map_x_max - map_x_min);
         int mask_y_min = map_y_min - y_min;
-        int mask_y_max = mask_y_min + (map_y_max - map_y_min);
         
         int mask_size = 2 * roi_r_ + 1;
         

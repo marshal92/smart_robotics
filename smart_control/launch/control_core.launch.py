@@ -37,7 +37,7 @@ def generate_launch_description():
     )
 
     nav_coordinator_node = Node(
-        package='smart_control',
+        package='smart_plugins',
         executable='nav_coordinator',
         name='nav_coordinator',
         output='screen'

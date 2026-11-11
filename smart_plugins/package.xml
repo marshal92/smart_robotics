@@ -3,22 +3,21 @@
 <package format="3">
   <name>smart_plugins</name>
   <version>1.0.0</version>
-  <description>C++ Nav2 plugins for Digital Twin</description>
+  <description>C++ core system nodes for Digital Twin (telemetry_mux, stabilized_frame_publisher)</description>
   <maintainer email="proskurin1408@gmail.com">Oleksandr Proskurin</maintainer>
   <license>GPL-3.0-or-later</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
   <depend>sensor_msgs</depend>
-  <depend>nav2_costmap_2d</depend>
-  <depend>nav2_core</depend>
-  <depend>nav2_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>trajectory_msgs</depend>
+  <depend>control_msgs</depend>
   <depend>smart_interfaces</depend>
   <depend>nlohmann_json</depend>
-  <depend>pluginlib</depend>
   <depend>std_msgs</depend>
-  <depend>std_srvs</depend>
   <depend>geometry_msgs</depend>
   <depend>tf2_ros</depend>
   <depend>tf2</depend>

@@ -121,9 +121,9 @@ class RadiationMapperWorker(Node):
         return response
 
     def _resolve_paths(self, map_path_param):
-        pkg_share = get_package_share_directory('smart_radiation')
-        src_dir = pkg_share.replace('install/smart_radiation/share/smart_radiation', 'src/smart_robotics/smart_radiation')
-        base_dir = os.path.join(src_dir, 'maps')
+        from pathlib import Path
+        pkg_root = Path(__file__).resolve().parent.parent
+        base_dir = str(pkg_root / 'maps') if (pkg_root / 'maps').exists() else os.path.join(get_package_share_directory('smart_radiation'), 'maps')
         os.makedirs(base_dir, exist_ok=True)
         
         if not os.path.isabs(map_path_param):

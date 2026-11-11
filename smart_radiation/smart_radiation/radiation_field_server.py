@@ -10,7 +10,32 @@ import numpy as np
 import cv2
 import os
 import json
+from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
+
+
+def default_maps_dir():
+    env_dir = os.environ.get('SMART_RADIATION_MAPS_DIR', '').strip()
+    if env_dir:
+        return os.path.expanduser(env_dir)
+    pkg_maps = Path(__file__).resolve().parent.parent / 'maps'
+    if pkg_maps.exists():
+        return str(pkg_maps)
+    try:
+        return os.path.join(get_package_share_directory('smart_radiation'), 'maps')
+    except Exception:
+        return str(pkg_maps)
+
+
+def resolve_map_path(maps_dir, map_path):
+    path = Path(map_path).expanduser()
+    if not path.is_absolute():
+        base = Path(maps_dir).expanduser() if maps_dir else Path(default_maps_dir())
+        path = base / path
+    if path.suffix != '.npy':
+        path = Path(str(path) + '.npy')
+    return str(path)
+
 
 class RadiationFieldServer(Node):
     def __init__(self):
@@ -18,28 +43,24 @@ class RadiationFieldServer(Node):
         super().__init__('radiation_field_server', parameter_overrides=[Parameter('use_sim_time', Parameter.Type.BOOL, False)])
         self.set_parameters([Parameter('use_sim_time', Parameter.Type.BOOL, False)])
 
-        self.d_noise = 50.0       
-        self.d_crit = 1000.0     
-        self.k = 10.0             
-
+        self.declare_parameter('d_noise', 50.0)
+        self.declare_parameter('d_crit', 1000.0)
+        self.declare_parameter('k', 10.0)
+        self.declare_parameter('maps_dir', default_maps_dir())
         self.declare_parameter('map_path', 'explored_map.npy')
-        map_path_param = self.get_parameter('map_path').value
-        
-        # DIRECT SRC LOAD using dynamic resolution
-        pkg_share = get_package_share_directory('smart_radiation')
-        src_dir = pkg_share.replace('install/smart_radiation/share/smart_radiation', 'src/smart_robotics/smart_radiation')
-        base_dir = os.path.join(src_dir, 'maps')
-        
-        if not os.path.isabs(map_path_param):
-            self.map_file = os.path.join(base_dir, map_path_param)
-        else:
-            self.map_file = map_path_param
+
+        self.d_noise = float(self.get_parameter('d_noise').value)
+        self.d_crit = float(self.get_parameter('d_crit').value)
+        self.k = float(self.get_parameter('k').value)
+        self.maps_dir = self.get_parameter('maps_dir').value or default_maps_dir()
+        self.map_path = self.get_parameter('map_path').value
+        self.map_file = resolve_map_path(self.maps_dir, self.map_path)
             
         self.rad_ox = -20.0
         self.rad_oy = -20.0
         self.rad_res = 0.05
             
-        self.load_map_from_disk()
+        self.load_map_from_disk(self.map_file)
 
         map_qos = QoSProfile(depth=1, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
         self.trigger_sub = self.create_subscription(Empty, '/radiation/map_updated', self.trigger_cb, 10)
@@ -58,36 +79,53 @@ class RadiationFieldServer(Node):
         self.get_logger().info("ALARA Radiation Server started! Optimized for Raspberry Pi.")
 
     def param_callback(self, params):
+        recalc = False
+        reload_disk = False
         for param in params:
             if param.name == 'is_active':
                 self.is_active = param.value
                 self.publish_map()
+            elif param.name == 'd_noise':
+                self.d_noise = float(param.value)
+                recalc = True
+            elif param.name == 'd_crit':
+                self.d_crit = float(param.value)
+                recalc = True
+            elif param.name == 'k':
+                self.k = float(param.value)
+                recalc = True
+            elif param.name == 'maps_dir':
+                self.maps_dir = param.value or default_maps_dir()
+                self.map_file = resolve_map_path(self.maps_dir, self.map_path)
+                reload_disk = True
             elif param.name == 'map_path':
-                map_path_param = param.value
-                if not os.path.isabs(map_path_param):
-                    pkg_share = get_package_share_directory('smart_radiation')
-                    src_dir = pkg_share.replace('install/smart_radiation/share/smart_radiation', 'src/smart_robotics/smart_radiation')
-                    base_dir = os.path.join(src_dir, 'maps')
-                    self.map_file = os.path.join(base_dir, map_path_param)
-                else:
-                    self.map_file = map_path_param
-                self.load_map_from_disk()
-                if self.last_map_msg is not None:
-                    self.cached_width = 0
-                    self.cached_height = 0
-                    self.map_callback(self.last_map_msg)
+                self.map_path = param.value
+                self.map_file = resolve_map_path(self.maps_dir, self.map_path)
+                reload_disk = True
+
+        if reload_disk:
+            self.load_map_from_disk(self.map_file)
+            recalc = True
+
+        if recalc and self.last_map_msg is not None:
+            self.cached_width = 0
+            self.cached_height = 0
+            self.map_callback(self.last_map_msg)
+
         return SetParametersResult(successful=True)
 
-    def load_map_from_disk(self):
+    def load_map_from_disk(self, file_path=None):
+        if file_path is None:
+            file_path = self.map_file
         try:
-            self.raw_dose_map = np.load(self.map_file)
-            self.get_logger().info(f"Successfully loaded Live Map: {self.raw_dose_map.shape}")
+            self.raw_dose_map = np.load(file_path)
+            self.get_logger().info(f"Successfully loaded Live Map: {self.raw_dose_map.shape} from {file_path}")
         except Exception as e:
-            self.get_logger().warn(f"Map {self.map_file} not found. Awaiting mapper generation.")
+            self.get_logger().warn(f"Map {file_path} not found. Awaiting mapper generation.")
             self.raw_dose_map = np.zeros((800, 800), dtype=np.float32)
 
-        base_dir = os.path.dirname(self.map_file)
-        base_name = os.path.splitext(os.path.basename(self.map_file))[0]
+        base_dir = os.path.dirname(file_path)
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
         meta_file = os.path.join(base_dir, f"{base_name}_meta.json")
         
         if os.path.exists(meta_file):
@@ -102,8 +140,8 @@ class RadiationFieldServer(Node):
                 pass
 
     def trigger_cb(self, msg):
-        self.get_logger().info("==> Received /radiation/map_updated trigger! Loading new SHM map...")
-        self.load_map_from_disk()
+        self.get_logger().info(f"==> Received /radiation/map_updated trigger! Reloading map from {self.map_file}...")
+        self.load_map_from_disk(self.map_file)
         if self.last_map_msg is not None:
             self.cached_width = 0
             self.cached_height = 0

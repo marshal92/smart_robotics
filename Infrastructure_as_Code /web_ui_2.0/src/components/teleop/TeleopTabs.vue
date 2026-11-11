@@ -41,8 +41,6 @@
         <div class="mission-group">
           <h4 class="group-title">Tools & Safety</h4>
           <div class="small-grid">
-            <button class="cmd-btn border-btn b-orange" @click="pubSys('rad_on')">Rad Map ON <span>Enable radiation sim</span></button>
-            <button class="cmd-btn border-btn b-red" @click="pubSys('rad_off')">Rad Map OFF <span>Disable radiation sim</span></button>
             <button class="cmd-btn border-btn b-orange" @click="pubSys('watchdog_on')">Watchdog ON <span>Enable safety</span></button>
             <button class="cmd-btn border-btn b-red" @click="pubSys('watchdog_off')">Watchdog OFF <span>Disable safety</span></button>
           </div>
@@ -57,15 +55,25 @@
     <div v-show="activeTab === 'radiation'" class="tab-content active">
       <div class="mission-groups">
         <div class="mission-group">
-          <h4 class="group-title">Mode</h4>
+          <h4 class="group-title">System & Sensor</h4>
           <div class="small-grid">
-            <button class="cmd-btn border-btn b-orange" @click="pubSys('rad_record:explored_map.npy')">Rad Record <span>explored_map.npy</span></button>
-            <button class="cmd-btn border-btn b-red" @click="pubSys('rad_clear')">Rad Clear <span>Clear memory</span></button>
-            <button class="cmd-btn border-btn b-blue" @click="pubSys('rad_save')">Rad Save <span>Save to disk</span></button>
+            <button class="cmd-btn border-btn b-orange" @click="pubSys('rad_on')">Rad Map ON <span>Enable radiation field</span></button>
+            <button class="cmd-btn border-btn b-red" @click="pubSys('rad_off')">Rad Map OFF <span>Disable radiation field</span></button>
+            <button class="cmd-btn border-btn b-orange" @click="pubSys('rad_geiger_on')">Virt Geiger ON <span>Simulated dosimeter</span></button>
+            <button class="cmd-btn border-btn b-red" @click="pubSys('rad_geiger_off')">Virt Geiger OFF <span>Physical sensor ready</span></button>
           </div>
         </div>
         <div class="mission-group">
-          <h4 class="group-title">Map</h4>
+          <h4 class="group-title">Mapping Mode</h4>
+          <div class="small-grid">
+            <button class="cmd-btn border-btn b-orange" @click="pubSys('rad_record:explored_map.npy')">Rad Record <span>explored_map.npy</span></button>
+            <button class="cmd-btn border-btn b-red" @click="pubSys('rad_stop')">Rad Stop <span>Stop & save rec</span></button>
+            <button class="cmd-btn border-btn b-blue" @click="pubSys('rad_save')">Rad Save <span>Save to disk</span></button>
+            <button class="cmd-btn border-btn b-red" @click="pubSys('rad_clear')">Rad Clear <span>Clear memory</span></button>
+          </div>
+        </div>
+        <div class="mission-group">
+          <h4 class="group-title">Load Map</h4>
           <div class="small-grid">
             <button class="cmd-btn border-btn b-blue" @click="pubSys('rad_load:radiation_map.npy')">Rad Load <span>radiation_map.npy</span></button>
             <button class="cmd-btn border-btn b-purple" @click="pubSys('rad_load:radiation_test_1.npy')">Rad Load Test <span>radiation_test_1.npy</span></button>

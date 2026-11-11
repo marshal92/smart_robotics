@@ -10,17 +10,44 @@ import numpy as np
 import cv2
 import os
 import json
+from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
+
+
+def default_maps_dir():
+    env_dir = os.environ.get('SMART_RADIATION_MAPS_DIR', '').strip()
+    if env_dir:
+        return os.path.expanduser(env_dir)
+    pkg_maps = Path(__file__).resolve().parent.parent / 'maps'
+    if pkg_maps.exists():
+        return str(pkg_maps)
+    try:
+        return os.path.join(get_package_share_directory('smart_radiation'), 'maps')
+    except Exception:
+        return str(pkg_maps)
+
+
+def resolve_map_path(maps_dir, map_path):
+    path = Path(map_path).expanduser()
+    if not path.is_absolute():
+        base = Path(maps_dir).expanduser() if maps_dir else Path(default_maps_dir())
+        path = base / path
+    if path.suffix != '.npy':
+        path = Path(str(path) + '.npy')
+    return str(path)
+
 
 class BaselineFieldServer(Node):
     def __init__(self):
         super().__init__('baseline_field_server')
 
+        self.declare_parameter('maps_dir', default_maps_dir())
         self.declare_parameter('map_path', 'radiation_map_complex.npy')
         self.declare_parameter('radiation_threshold', 1000.0)
         self.declare_parameter('radiation_cost', 95) # 95 -> ~241 in Costmap (high penalty, but not a solid wall)
         self.declare_parameter('is_active', False)
         
+        self.maps_dir = self.get_parameter('maps_dir').value or default_maps_dir()
         self.map_path_param = self.get_parameter('map_path').value
         self.radiation_threshold = self.get_parameter('radiation_threshold').value
         self.radiation_cost = self.get_parameter('radiation_cost').value
@@ -47,11 +74,7 @@ class BaselineFieldServer(Node):
         self.get_logger().info(f"Baseline Server started! Threshold: {self.radiation_threshold}")
 
     def _resolve_map_path(self):
-        if not os.path.isabs(self.map_path_param):
-            base_dir = '/home/oleksandr/ros2_ws/src/smart_robotics/smart_radiation/maps'
-            self.map_file = os.path.join(base_dir, self.map_path_param)
-        else:
-            self.map_file = self.map_path_param
+        self.map_file = resolve_map_path(self.maps_dir, self.map_path_param)
 
     def param_callback(self, params):
         for param in params:
@@ -66,6 +89,12 @@ class BaselineFieldServer(Node):
             elif param.name == 'radiation_cost':
                 self.radiation_cost = param.value
                 self.get_logger().info(f"Updated radiation cost to {self.radiation_cost}")
+                if self.last_map_msg is not None:
+                    self.map_callback(self.last_map_msg)
+            elif param.name == 'maps_dir':
+                self.maps_dir = param.value or default_maps_dir()
+                self._resolve_map_path()
+                self.load_map_from_disk()
                 if self.last_map_msg is not None:
                     self.map_callback(self.last_map_msg)
             elif param.name == 'map_path':
