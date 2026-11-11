@@ -63,6 +63,16 @@ class MissionManager(Node):
 
         self.get_logger().info(f"Mission Manager started. sim_time={self.use_sim_time}")
 
+    # HELPER TO BUILD ROBUST SHELL COMMAND FOR TMUX
+    def _build_tmux_ros_cmd(self, cmd: str) -> str:
+        return (
+            "source /opt/ros/jazzy/setup.bash && "
+            "source ~/ros2_ws/install/setup.bash && "
+            "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp && "
+            "[ -f /home/oleksandr/cyclonedds.xml ] && export CYCLONEDDS_URI=file:///home/oleksandr/cyclonedds.xml; "
+            f"exec {cmd}"
+        )
+
     # RADIATION SUBSYSTEM PROCESS LIFECYCLE
 
     def _check_rad_session_real(self):
@@ -128,9 +138,10 @@ class MissionManager(Node):
                 f"ros2 launch smart_radiation radiation_bringup.launch.py "
                 f"use_sim_time:={sim} initial_active:={act}"
             )
+            env_cmd = self._build_tmux_ros_cmd(cmd)
 
             subprocess.Popen(
-                ['tmux', 'new-session', '-d', '-s', self.rad_session_name, cmd],
+                ['tmux', 'new-session', '-d', '-s', self.rad_session_name, env_cmd],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL
             )
             self.get_logger().info(f"Radiation subsystem bringup started (initial_active={act}).")
@@ -173,27 +184,19 @@ class MissionManager(Node):
             sim = "true" if self.use_sim_time else "false"
             launch_file = f"bringup_{slam_mode}.launch.py"
 
-            # CLEAN start of navigation (without workarounds for passing coordinates to launch)
+            # CLEAN start of navigation
             cmd = f"ros2 launch smart_nav {launch_file} map_name:={map_name} use_sim_time:={sim}"
+            env_cmd = self._build_tmux_ros_cmd(cmd)
 
             subprocess.Popen(
-                ['tmux', 'new-session', '-d', '-s', self.session_name, cmd],
+                ['tmux', 'new-session', '-d', '-s', self.session_name, env_cmd],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL
             )
             self._invalidate_cache()
             self.get_logger().info(f"Tactical Layer started: {slam_mode} | Map: {map_name}")
 
-            # If we have loaded a ready map, check coordinates before firing
-            if slam_mode == "lifelong":
-                x = float(self.get_parameter('spawn_x').value)
-                y = float(self.get_parameter('spawn_y').value)
-                yaw = float(self.get_parameter('spawn_yaw').value)
-
-                # CONDITION: we only fire if coordinates are not zero (more than 1 cm)
-                if abs(x) > 0.01 or abs(y) > 0.01 or abs(yaw) > 0.01:
-                    threading.Thread(target=self._publish_initial_pose, args=(x, y, yaw), daemon=True).start()
-                else:
-                    self.get_logger().info("Spawn is near (0,0,0). Skipping /initialpose to protect graph.")
+            # Note: automatic /initialpose on start disabled per user instruction to protect map/graph
+            self.get_logger().info("Automatic /initialpose on mission start is disabled.")
 
     def _publish_initial_pose(self, x, y, yaw):
         """Waits for SLAM to boot and then sends the initial pose"""
