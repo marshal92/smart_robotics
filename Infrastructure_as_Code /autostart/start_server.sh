@@ -45,7 +45,7 @@ tmux send-keys -t $SESSION:0 "$ZENOH_CMD" C-m
 
 # Window 2: Local server nodes (Orchestrator, Shadow, Web UI, etc.)
 tmux new-window -t $SESSION:2 -n 'Master_Launch'
-tmux send-keys -t $SESSION:2 'source ~/ros2_ws/install/setup.bash' C-m
+tmux send-keys -t $SESSION:2 'source /opt/ros/jazzy/setup.bash && source ~/ros2_ws/install/setup.bash' C-m
 tmux send-keys -t $SESSION:2 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' C-m
 tmux send-keys -t $SESSION:2 'sleep 2' C-m
 tmux send-keys -t $SESSION:2 "ros2 launch smart_server server.launch.py use_arm:=$USE_ARM" C-m

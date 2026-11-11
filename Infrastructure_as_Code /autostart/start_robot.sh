@@ -47,7 +47,8 @@ tmux send-keys -t $SESSION:0 'while true; do ros2 run micro_ros_agent micro_ros_
 # Window 1: Hardware and Control Infrastructure
 tmux new-window -t $SESSION:1 -n 'Hardware'
 tmux send-keys -t $SESSION:1 "export CYCLONEDDS_URI=$CYCLONEDDS_URI" C-m
-tmux send-keys -t $SESSION:1 'source ~/ros2_ws/install/setup.bash' C-m
+tmux send-keys -t $SESSION:1 'source /opt/ros/jazzy/setup.bash && source ~/ros2_ws/install/setup.bash' C-m
+tmux send-keys -t $SESSION:1 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' C-m
 tmux send-keys -t $SESSION:1 'sleep 2' C-m
 tmux send-keys -t $SESSION:1 "ros2 launch smart_master real_master.launch.py use_arm:=$USE_ARM" C-m
 
