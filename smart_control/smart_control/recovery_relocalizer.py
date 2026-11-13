@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """
-Recovery Relocalizer — автоматическое восстановление локализации.
+Recovery Relocalizer — automatic localization recovery node.
 
-По команде 'recover_localization' из /smart_command:
-1. Останавливает робота (cancel)
-2. Паузит SLAM (toggle pause)
-3. Загружает PGM-карту с диска (2D-картинка стен)
-4. Глобальный Coarse-to-Fine скан-матчинг: ищет (x, y, yaw) робота
-5. Горячо перезагружает чистый posegraph в SLAM Toolbox с найденной позой
-   через сервис /slam_toolbox/deserialize_map (НЕ через tmux/launch!)
-6. Снимает паузу SLAM
+Triggered by 'recover_localization' on /smart_command:
+1. Stops the robot (cancel)
+2. Pauses SLAM (toggle pause)
+3. Loads PGM occupancy map from disk (2D wall image)
+4. Runs global Coarse-to-Fine scan matching to estimate robot (x, y, yaw)
+5. Hot-reloads clean posegraph into SLAM Toolbox with the recovered pose
+   via /slam_toolbox/deserialize_map service (WITHOUT restarting tmux/launch)
+6. Unpauses SLAM
 
-Нода живёт в smart_control, запускается из control_core.launch.py,
-ждёт команду и ничего не делает пока её не позовут.
+Runs inside smart_control (launched by control_core.launch.py),
+staying idle until triggered.
 
-TODO: в будущем читать имя активной карты из SmartTelemetry
-      вместо хардкода.
+TODO: Read the active map name dynamically from SmartTelemetry instead of hardcoding.
 """
 import rclpy
 from rclpy.node import Node
@@ -38,7 +37,7 @@ class RecoveryRelocalizer(Node):
     def __init__(self):
         super().__init__('recovery_relocalizer')
 
-        # === Параметры ===
+        # === Parameters ===
         self.declare_parameter('maps_dir',
                                '/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/maps')
         self.declare_parameter('default_map', '213_map')
@@ -60,12 +59,12 @@ class RecoveryRelocalizer(Node):
         self.scan_decimation = self.get_parameter('scan_decimation').value
         self.min_match_pct = self.get_parameter('min_match_percent').value
 
-        # === Состояние ===
+        # === State ===
         self.latest_scan = None
         self.is_recovering = False
         self._lock = threading.Lock()
 
-        # === Подписки ===
+        # === Subscriptions ===
         qos = QoSProfile(
             depth=10,
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -76,12 +75,12 @@ class RecoveryRelocalizer(Node):
         self.create_subscription(
             LaserScan, '/scan', self._scan_cb, 10)
 
-        # === Публикации ===
+        # === Publications ===
         self.cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
         self.initialpose_pub = self.create_publisher(
             PoseWithCovarianceStamped, '/initialpose', 10)
 
-        # === Сервис-клиенты (к уже работающему SLAM Toolbox) ===
+        # === Service Clients (targeting active SLAM Toolbox) ===
         self.pause_cli = self.create_client(
             Pause, '/slam_toolbox/pause_new_measurements')
         self.deserialize_cli = self.create_client(
@@ -91,7 +90,7 @@ class RecoveryRelocalizer(Node):
             f"Recovery Relocalizer ready. Default map: {self.default_map}")
 
     # ================================================================
-    #  Колбэки
+    #  Callbacks
     # ================================================================
 
     def _scan_cb(self, msg):
@@ -107,7 +106,7 @@ class RecoveryRelocalizer(Node):
                 return
             self.is_recovering = True
 
-        # Читаем имя карты из payload (если есть), иначе — default
+        # Read map name from payload if provided, otherwise fall back to default
         map_name = self.default_map
         if msg.payload_json:
             try:
@@ -131,23 +130,23 @@ class RecoveryRelocalizer(Node):
         ).start()
 
     # ================================================================
-    #  Основной пайплайн восстановления
+    #  Main Recovery Pipeline
     # ================================================================
 
     def _run_recovery(self, map_name):
         try:
-            # --- 1. Остановка робота ---
+            # --- 1. Stop robot ---
             self.get_logger().info("[1/6] Stopping robot...")
             self.cmd_pub.publish(
                 SmartCommand(target_system='nav', command='cancel'))
             time.sleep(0.5)
 
-            # --- 2. Пауза SLAM (toggle) ---
+            # --- 2. Pause SLAM (toggle) ---
             self.get_logger().info("[2/6] Pausing SLAM...")
             self._toggle_slam_pause()
             time.sleep(0.3)
 
-            # --- 3. Загрузка PGM-карты с диска ---
+            # --- 3. Load PGM map from disk ---
             self.get_logger().info("[3/6] Loading reference map from disk...")
             map_data = self._load_pgm_map(map_name)
             if map_data is None:
@@ -158,7 +157,7 @@ class RecoveryRelocalizer(Node):
 
             wall_mask, free_mask, res, ox, oy, w, h = map_data
 
-            # --- 4. Текущий скан лидара ---
+            # --- 4. Acquire current LiDAR scan ---
             self.get_logger().info("[4/6] Acquiring laser scan...")
             if self.latest_scan is None:
                 self.get_logger().error("No scan data available! Aborting.")
@@ -175,7 +174,7 @@ class RecoveryRelocalizer(Node):
             self.get_logger().info(
                 f"  Scan: {len(lx)} points (after decimation)")
 
-            # --- 5. Глобальный скан-матчинг ---
+            # --- 5. Global scan matching ---
             self.get_logger().info(
                 f"[5/6] Global scan matching ({len(lx)} pts vs "
                 f"{w}x{h} map)...")
@@ -202,17 +201,17 @@ class RecoveryRelocalizer(Node):
                     f"  Low confidence ({pct:.1f}% < {self.min_match_pct}%). "
                     f"Proceeding anyway — verify in RViz!")
 
-            # --- 6. Горячая перезагрузка posegraph ---
+            # --- 6. Hot-reload posegraph ---
             self.get_logger().info(
                 "[6/6] Hot-reloading posegraph with found position...")
             self._reload_posegraph(map_name, bx, by, byaw)
             time.sleep(1.5)
 
-            # Страховка: дублируем через /initialpose
+            # Safeguard: also publish via /initialpose
             self._publish_initialpose(bx, by, byaw)
             time.sleep(0.5)
 
-            # Снимаем паузу (toggle обратно)
+            # Resume SLAM (toggle back)
             self._toggle_slam_pause()
 
             self.get_logger().info(
@@ -229,7 +228,7 @@ class RecoveryRelocalizer(Node):
             self.get_logger().error(f"Recovery failed with exception: {e}")
             import traceback
             self.get_logger().error(traceback.format_exc())
-            # Пытаемся снять паузу даже при ошибке
+            # Try unpausing SLAM even after an error
             try:
                 self._toggle_slam_pause()
             except Exception:
@@ -239,21 +238,21 @@ class RecoveryRelocalizer(Node):
                 self.is_recovering = False
 
     # ================================================================
-    #  Загрузка карты с диска (PGM + YAML)
+    #  Map Loading from Disk (PGM + YAML)
     # ================================================================
 
     def _load_pgm_map(self, map_name):
         """
-        Загружает PGM + YAML файлы карты.
-        Возвращает (wall_mask, free_mask, resolution, origin_x, origin_y, w, h)
-        или None при ошибке.
+        Load PGM + YAML map files.
+        Returns (wall_mask, free_mask, resolution, origin_x, origin_y, w, h)
+        or None on failure.
         
-        wall_mask: float32 ndarray, 1.0 = стена (для скоринга)
-        free_mask: bool ndarray, True = свободно (для перебора позиций)
+        wall_mask: float32 ndarray, 1.0 = wall (used for scoring)
+        free_mask: bool ndarray, True = free space (candidate search grid)
         
-        Массивы в системе координат OccupancyGrid:
-          row 0 = низ карты (origin_y),
-          col 0 = левый край (origin_x).
+        Arrays follow OccupancyGrid coordinates:
+          row 0 = bottom of map (origin_y),
+          col 0 = left edge (origin_x).
         """
         yaml_path = os.path.join(self.maps_dir, f"{map_name}.yaml")
         if not os.path.exists(yaml_path):
@@ -270,7 +269,7 @@ class RecoveryRelocalizer(Node):
         free_thresh = float(meta.get('free_thresh', 0.196))
         negate = bool(int(meta.get('negate', 0)))
 
-        # Ищем PGM: сначала по YAML, потом фоллбэк на {map_name}.pgm
+        # Locate PGM: prefer YAML image entry, then fall back to {map_name}.pgm
         pgm_name = meta.get('image', f'{map_name}.pgm')
         pgm_path = os.path.join(self.maps_dir, pgm_name)
         if not os.path.exists(pgm_path):
@@ -279,16 +278,16 @@ class RecoveryRelocalizer(Node):
             self.get_logger().error(f"PGM not found: {pgm_path}")
             return None
 
-        # Загрузка изображения
+        # Load image
         pixels = self._load_image(pgm_path)
         if pixels is None:
             return None
 
-        # Переворачиваем по вертикали: PGM row=0 это верх картинки,
-        # а нам нужен row=0 = низ (как в OccupancyGrid)
+        # Flip vertically: PGM row=0 is top of image,
+        # whereas OccupancyGrid uses row=0 as bottom
         pixels = np.flipud(pixels).astype(np.float32)
 
-        # Вероятность занятости
+        # Occupancy probability
         if negate:
             prob = pixels / 255.0
         else:
@@ -297,14 +296,14 @@ class RecoveryRelocalizer(Node):
         wall_binary = (prob > occ_thresh).astype(np.float32)
         free_mask = (prob < free_thresh)
 
-        # Gaussian Smear: "размазываем" стены на ±3 пикселя (~15 см).
-        # Без этого score падает в ноль при сдвиге на 1 пиксель (5 см),
-        # и грубый поиск с шагом 25 см не попадает в правильную позу.
-        # Это стандартный приём Correlative Scan Matcher.
+        # Gaussian Smear: blur walls across +-3 pixels (~15 cm).
+        # Without this, score drops to zero on a 1-pixel (5 cm) offset,
+        # causing the 25 cm coarse grid search to miss the true pose.
+        # Standard Correlative Scan Matcher technique.
         try:
             from scipy.ndimage import gaussian_filter
             wall_mask = gaussian_filter(wall_binary, sigma=3.0)
-            # Нормализуем чтобы максимум был 1.0
+            # Normalize peak to 1.0
             wmax = wall_mask.max()
             if wmax > 0:
                 wall_mask = wall_mask / wmax
@@ -325,7 +324,7 @@ class RecoveryRelocalizer(Node):
         return wall_mask, free_mask, resolution, origin_x, origin_y, w, h
 
     def _load_image(self, path):
-        """Загружает PGM через cv2 или PIL (что найдётся)."""
+        """Load PGM via cv2 or PIL (whichever is available)."""
         try:
             import cv2
             img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
@@ -346,11 +345,11 @@ class RecoveryRelocalizer(Node):
         return None
 
     # ================================================================
-    #  Обработка лидарного скана
+    #  LiDAR Scan Processing
     # ================================================================
 
     def _scan_to_points(self, scan):
-        """LaserScan → массивы (lx, ly) точек в base_link."""
+        """LaserScan -> arrays (lx, ly) of points in base_link."""
         ranges = np.array(scan.ranges, dtype=np.float32)
         angles = (scan.angle_min +
                   np.arange(len(ranges)) * scan.angle_increment)
@@ -361,7 +360,7 @@ class RecoveryRelocalizer(Node):
         ranges = ranges[valid]
         angles = angles[valid]
 
-        # Децимация для ускорения
+        # Decimate scan rays for speed
         if self.scan_decimation > 1:
             ranges = ranges[::self.scan_decimation]
             angles = angles[::self.scan_decimation]
@@ -371,17 +370,16 @@ class RecoveryRelocalizer(Node):
         return lx, ly
 
     # ================================================================
-    #  Глобальный скан-матчинг (Coarse-to-Fine)
+    #  Global Scan Matching (Coarse-to-Fine)
     # ================================================================
 
     def _global_scan_match(self, lx, ly, wall_mask, free_mask,
                            res, ox, oy, w, h):
         """
-        Перебирает все возможные (x, y, yaw) на карте.
-        Для каждой гипотезы проецирует точки лидара и считает,
-        сколько попало в стены.
+        Exhaustively evaluates candidate (x, y, yaw) poses across the map.
+        Projects LiDAR scan points for each hypothesis and sums wall overlap score.
 
-        Возвращает (best_x, best_y, best_yaw, best_score, n_points).
+        Returns (best_x, best_y, best_yaw, best_score, n_points).
         """
         n_pts = len(lx)
         step_cells = max(1, int(self.coarse_step / res))
@@ -389,9 +387,9 @@ class RecoveryRelocalizer(Node):
 
         best_score = -1.0
         best_pose = (0.0, 0.0, 0.0)
-        candidates = []  # (score, x, y, yaw) для fine pass
+        candidates = []  # (score, x, y, yaw) for fine pass
 
-        # --- Грубый проход ---
+        # --- Coarse pass ---
         n_checked = 0
         for r in range(0, h, step_cells):
             for c in range(0, w, step_cells):
@@ -411,7 +409,7 @@ class RecoveryRelocalizer(Node):
                         best_score = s
                         best_pose = (wx, wy, yaw)
 
-                    # Кандидаты для уточнения
+                    # Candidates for refinement
                     if s > n_pts * 0.2:
                         candidates.append((s, wx, wy, yaw))
 
@@ -422,7 +420,7 @@ class RecoveryRelocalizer(Node):
         if best_score < 0:
             return 0.0, 0.0, 0.0, -1.0, n_pts
 
-        # --- Дедупликация кандидатов (убираем близкие) ---
+        # --- Candidate deduplication (drop nearby duplicates) ---
         candidates.sort(key=lambda c: c[0], reverse=True)
         unique = []
         for s, cx, cy, cyaw in candidates:
@@ -440,7 +438,7 @@ class RecoveryRelocalizer(Node):
         self.get_logger().info(
             f"  Fine: refining {len(unique)} candidates...")
 
-        # --- Точный проход ---
+        # --- Fine pass ---
         radius = self.coarse_step
         fine_yaws = np.arange(
             -self.coarse_angle_step, self.coarse_angle_step,
@@ -461,19 +459,19 @@ class RecoveryRelocalizer(Node):
 
     def _score_pose(self, wx, wy, yaw, lx, ly,
                     wall_mask, res, ox, oy, w, h):
-        """Оценка гипотезы: % точек скана, попавших в стены карты."""
+        """Hypothesis score: sum of wall mask values hit by projected scan points."""
         cos_y = math.cos(yaw)
         sin_y = math.sin(yaw)
 
-        # Поворот + сдвиг облака точек в мировые координаты
+        # Rotate + translate point cloud into world coordinates
         gx = wx + (lx * cos_y - ly * sin_y)
         gy = wy + (lx * sin_y + ly * cos_y)
 
-        # Мировые → индексы карты
+        # World -> map indices
         mx = ((gx - ox) / res).astype(np.int32)
         my = ((gy - oy) / res).astype(np.int32)
 
-        # Границы
+        # Bounds check
         valid = (mx >= 0) & (mx < w) & (my >= 0) & (my < h)
         n_valid = np.count_nonzero(valid)
         if n_valid == 0:
@@ -482,11 +480,11 @@ class RecoveryRelocalizer(Node):
         return float(np.sum(wall_mask[my[valid], mx[valid]]))
 
     # ================================================================
-    #  Управление SLAM Toolbox
+    #  SLAM Toolbox Control
     # ================================================================
 
     def _toggle_slam_pause(self):
-        """Toggle пауза SLAM (как в mission_manager)."""
+        """Toggle SLAM pause (same service as mission_manager)."""
         if not self.pause_cli.wait_for_service(timeout_sec=2.0):
             self.get_logger().warn(
                 "SLAM pause service not available! Skipping.")
@@ -496,16 +494,16 @@ class RecoveryRelocalizer(Node):
 
     def _reload_posegraph(self, map_name, x, y, yaw):
         """
-        Горячая перезагрузка чистого posegraph в уже работающий
-        SLAM Toolbox с указанием найденной позы.
-        НЕ перезапускает ноду, НЕ трогает tmux.
+        Hot-reload a clean posegraph into the running SLAM Toolbox instance
+        at the recovered pose.
+        Does NOT restart the node or touch tmux.
         """
         if not self.deserialize_cli.wait_for_service(timeout_sec=3.0):
             self.get_logger().error(
                 "DeserializePoseGraph service not available!")
             return
 
-        # Путь без расширения — SLAM Toolbox сам добавит .posegraph/.data
+        # Path without extension — SLAM Toolbox appends .posegraph/.data automatically
         posegraph_path = os.path.join(self.maps_dir, map_name)
 
         req = DeserializePoseGraph.Request()
@@ -522,7 +520,7 @@ class RecoveryRelocalizer(Node):
         self.deserialize_cli.call_async(req)
 
     def _publish_initialpose(self, x, y, yaw):
-        """Дублирует позу через /initialpose для страховки."""
+        """Also publish pose to /initialpose as a fallback safeguard."""
         msg = PoseWithCovarianceStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = 'map'
@@ -530,7 +528,7 @@ class RecoveryRelocalizer(Node):
         msg.pose.pose.position.y = float(y)
         msg.pose.pose.orientation.z = math.sin(float(yaw) / 2.0)
         msg.pose.pose.orientation.w = math.cos(float(yaw) / 2.0)
-        # Жёсткая ковариация (высокая уверенность)
+        # Tight covariance (high confidence)
         msg.pose.covariance[0] = 0.05   # X
         msg.pose.covariance[7] = 0.05   # Y
         msg.pose.covariance[35] = 0.02  # Yaw

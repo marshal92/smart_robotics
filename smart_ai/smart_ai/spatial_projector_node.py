@@ -63,7 +63,7 @@ class SpatialProjectorNode(Node):
                 self.cmd_pub.publish(stop_cmd)
                 
                 tts = String()
-                tts.data = f"Вижу {self.target_class}. Подъезжаю."
+                tts.data = f"I see {self.target_class}. Approaching."
                 self.tts_pub.publish(tts)
                 
                 self.get_logger().info(f"Target {self.target_class} found! Switching to track mode.")

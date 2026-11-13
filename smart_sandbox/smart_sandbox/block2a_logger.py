@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Экспериментальный логгер для Раздела 4 (§4.2, Блок 2A):
-Запуск по сохранённому графу (холодный старт навигационной подсистемы):
-1. Засекает время от запуска до появления первой оценки положения в map (t_init_pose_s, t_init_tf_s).
-2. Фиксирует начальную позу (x, y, yaw) и её разброс за первые 5 секунд стояния.
-3. Проверяет совмещение первого скана (/scan) с картой (/map): доля лучей, попадающих в занятые ячейки карты.
-4. Записывает короткий проезд к целевой точке и сохраняет CSV + паспорт эксперимента.
+Experimental logger for Section 4 (§4.2, Block 2A):
+Cold start of the navigation subsystem using a serialized posegraph:
+1. Measures elapsed time from startup to first map-frame pose estimate (t_init_pose_s, t_init_tf_s).
+2. Records initial pose (x, y, yaw) and its spread during the first 5 seconds stationary window.
+3. Evaluates alignment of the initial LaserScan (/scan) against /map (fraction of rays hitting occupied cells).
+4. Records a short drive to a target point and saves CSV + experiment passport JSON.
 """
 
 import os
@@ -102,12 +102,12 @@ class Block2ALogger(Node):
         self.scan_map_match_ratio = None
         self.scan_valid_beams = 0
 
-        # Выборка начальной позы за первые init_window_sec после появления оценки
+        # Initial pose sample buffer over first init_window_sec after first estimate
         self.init_samples_x = []
         self.init_samples_y = []
         self.init_samples_yaw_deg = []
 
-        # Траектория короткого движения
+        # Short-drive trajectory metrics
         self.path_length_m = 0.0
         self.prev_map_x = None
         self.prev_map_y = None
@@ -203,7 +203,7 @@ class Block2ALogger(Node):
         self.nav_status = msg.data.strip()
 
     def _compute_scan_map_match(self, rx, ry, ryaw_rad):
-        """Оценивает долю лучей /scan, попавших в занятые ячейки /map (в окрестности +-2 ячейки = +-10 см)."""
+        """Estimate the fraction of /scan rays hitting occupied /map cells (within +-2 cells = +-10 cm)."""
         if self.map_msg is None or self.last_scan is None:
             return None
         info = self.map_msg.info
@@ -220,7 +220,7 @@ class Block2ALogger(Node):
         hits = 0
         valid = 0
 
-        # Учитываем смещение лазера относительно base_footprint (~ -0.12, +0.06)
+        # Account for LiDAR offset relative to base_footprint (~ -0.12, +0.06)
         lx = rx - 0.12 * math.cos(ryaw_rad) - 0.06 * math.sin(ryaw_rad)
         ly = ry - 0.12 * math.sin(ryaw_rad) + 0.06 * math.cos(ryaw_rad)
 
@@ -284,7 +284,7 @@ class Block2ALogger(Node):
             self.final_map_y = map_y
             self.final_map_yaw_deg = map_yaw_deg
 
-            # Собираем начальное окно оценки позы (первые init_window_sec после появления TF, пока робот стоит)
+            # Collect initial pose stability window (first init_window_sec after TF appears while robot is stationary)
             if self.t_first_map_tf is not None and (elapsed - self.t_first_map_tf) <= self.init_window_sec and self.t_first_move is None:
                 self.init_samples_x.append(map_x)
                 self.init_samples_y.append(map_y)

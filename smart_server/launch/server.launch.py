@@ -17,9 +17,9 @@ def generate_launch_description():
     pkg_smart_master = FindPackageShare('smart_master')
     urdf_path = PathJoinSubstitution([pkg_smart_master, 'urdf', 'full_system.urdf.xacro'])
 
-    # Локальные RSP и JSP на сервере (только для реального робота, когда use_sim_time=false),
-    # чтобы Web UI 2.0 и RViz получали URDF (/robot_state_publisher/get_parameters и /joint_states)
-    # локально без забивания радиоканала Zenoh.
+    # Local RSP and JSP on the server (only for the real robot when use_sim_time=false),
+    # so Web UI 2.0 and RViz receive URDF (/robot_state_publisher/get_parameters and /joint_states)
+    # locally without saturating the Zenoh radio link.
     rsp_real_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',

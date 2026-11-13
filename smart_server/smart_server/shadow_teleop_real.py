@@ -6,7 +6,7 @@ from nav_msgs.msg import Path, OccupancyGrid
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
-from smart_interfaces.msg import SmartCommand # Импортируем нашу шину
+from smart_interfaces.msg import SmartCommand # Import unified command bus
 
 import math
 import json
@@ -26,7 +26,7 @@ class ShadowTeleopReal(Node):
         self.marker_pub = self.create_publisher(Marker, '/shadow_marker', 10)
         self.path_pub   = self.create_publisher(Path,   '/shadow_path',   10)
         
-        # НОВЫЙ ПАБЛИШЕР: Отправляем готовый маршрут на робота
+        # Publisher: send the validated route to the robot
         self.smart_cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
 
         self.tf_buffer   = None
@@ -165,7 +165,7 @@ class ShadowTeleopReal(Node):
             
         self.get_logger().info(f"Packing Shadow Route ({len(self.recorded_poses)} points) for Nav Coordinator...")
         
-        # Упаковываем маршрут в простой список
+        # Pack the route as a flat waypoint list
         points_list = []
         for p in self.recorded_poses:
             yaw = self._yaw(p.pose.orientation)
@@ -173,10 +173,10 @@ class ShadowTeleopReal(Node):
 
         payload = {
             "points": points_list,
-            "bt": "" # Место для кастомного дерева поведения, если понадобится
+            "bt": "" # Placeholder for custom Behavior Tree XML if needed
         }
         
-        # Отправляем в общую шину
+        # Publish to the unified command bus
         msg = SmartCommand()
         msg.target_system = 'nav'
         msg.command = 'waypoints'
@@ -184,7 +184,7 @@ class ShadowTeleopReal(Node):
         
         self.smart_cmd_pub.publish(msg)
         
-        # Сбрасываем Тень после отправки
+        # Reset Shadow state after dispatch
         self.state = 'IDLE'
         self.recorded_poses.clear()
         self.path_msg.poses.clear()

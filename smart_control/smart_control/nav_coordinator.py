@@ -19,7 +19,7 @@ class NavCoordinator(Node):
         self.current_fsm_state = "UNKNOWN"
         self.bt_survival = "" 
         
-        # Состояние скользящего окна вейпоинтов (Sliding Window)
+        # Waypoint sliding-window state
         self.sw_active = False
         self.sw_poses = []
         self.sw_lap_nums = []
@@ -28,18 +28,18 @@ class NavCoordinator(Node):
         self.sw_bt = ""
         self.sw_name = "route"
         self.sw_last_sent_indices = ()
-        self.sw_window_size = 5     # макс. кол-во точек в скользящем окне
-        self.sw_pass_radius = 0.75  # м — радиус зачёта промежуточной точки
-        self.sw_min_end_dist = 1.80 # м — минимальная дистанция от робота до конца окна (должна быть > threshold_to_consider=1.4)
+        self.sw_window_size = 5     # max waypoints per sliding window
+        self.sw_pass_radius = 0.75  # m — intermediate waypoint pass radius
+        self.sw_min_end_dist = 1.80 # m — min distance from robot to window end (must exceed MPPI threshold_to_consider=1.4)
         self.resume_snapshot = None
         self.nav_paused = False
         self.cancel_requested = False
 
-        # Позиция робота в map (обновляется из лёгкого /pose от SLAM и фидбека Nav2 без тяжёлого /tf)
+        # Robot position in map frame (updated from lightweight SLAM /pose and Nav2 feedback without heavy /tf)
         self.robot_x = None
         self.robot_y = None
         
-        # Внутренний массив для накопления маршрута (когда точки добавляются по одной)
+        # Internal buffer for accumulating a route point by point
         self.route_accumulator = []
 
         self.create_subscription(SmartCommand, '/smart_command', self.cmd_cb, 10)
@@ -57,7 +57,7 @@ class NavCoordinator(Node):
         return self.robot_x, self.robot_y
 
     def save_resume_state(self):
-        """Сохраняет текущую точку/маршрут и очередь, чтобы можно было нажать RESUME после отъезда."""
+        """Save the active point/route and queue so the operator can press RESUME after moving clear."""
         if self.sw_active and self.sw_poses and self.sw_idx < len(self.sw_poses):
             self.resume_snapshot = {
                 'type': 'waypoints',
@@ -89,26 +89,26 @@ class NavCoordinator(Node):
         self.sw_last_sent_indices = ()
 
     def build_sliding_window(self, rx, ry):
-        """Формирует окно из 1..3 точек вперёд так, чтобы конечная точка окна
-        никогда не оказывалась рядом с роботом (иначе в MPPI отключается PathFollowCritic)."""
+        """Build a lookahead window of 1..sw_window_size points so the window end never collapses onto the robot
+        (otherwise MPPI disables PathFollowCritic)."""
         n = len(self.sw_poses)
         if self.sw_idx >= n:
             return [], ()
         
         indices = [self.sw_idx]
-        # Добавляем следующие точки в окно (до sw_window_size), только если они не замыкают кольцо прямо под роботом
+        # Add subsequent waypoints up to sw_window_size unless they close a loop right beneath the robot
         for offset in range(1, self.sw_window_size):
             cand_idx = self.sw_idx + offset
             if cand_idx >= n:
                 break
             cand_p = self.sw_poses[cand_idx].pose.position
             prev_p = self.sw_poses[indices[-1]].pose.position
-            # Не добавляем в текущее окно точку, если она совпадает с предыдущей
+            # Skip adding duplicate consecutive waypoints to the active window
             if math.hypot(cand_p.x - prev_p.x, cand_p.y - prev_p.y) < 0.25:
                 break
             if rx is not None and ry is not None:
                 dist_to_robot = math.hypot(cand_p.x - rx, cand_p.y - ry)
-                # Конец окна должен быть дальше 1.8 м от робота (у MPPI threshold_to_consider = 1.4 м)
+                # Window tail must remain beyond 1.8 m from the robot (MPPI threshold_to_consider = 1.4 m)
                 if dist_to_robot < self.sw_min_end_dist:
                     break
             indices.append(cand_idx)
@@ -120,7 +120,7 @@ class NavCoordinator(Node):
         self.current_fsm_state = msg.data
 
     def cmd_cb(self, msg):
-        # 1. Глобальные системные остановки
+        # 1. Global system stops
         if msg.target_system == 'system':
             cmd = msg.command.strip().lower()
             if cmd in ['stop', 'start_freeride', 'restart']:
@@ -132,11 +132,11 @@ class NavCoordinator(Node):
                 self.cancel_requested = True
             return
 
-        # 2. Тактические команды навигации
+        # 2. Tactical navigation commands
         if msg.target_system == 'nav':
             action = msg.command.strip().lower()
             if action == 'go_to_named':
-                # go_to_named обрабатывается в waypoint_manager
+                # go_to_named is handled by waypoint_manager
                 return
             
             payload = {}
@@ -221,12 +221,12 @@ class NavCoordinator(Node):
                 self.nav_queue.append({'type': 'rth', 'pose': goal_pose})
                 return
 
-            # Проверка безопасности (FSM)
+            # Safety check (FSM)
             if self.current_fsm_state not in ["NORMAL", "DISABLED"]:
                 self.get_logger().warn(f"Restricted: system in state {self.current_fsm_state}. Route rejected.")
                 return
 
-            # Одиночная поездка в точку
+            # Single-point navigation
             if action in ["go_to", "go_to_with_bt"]:
                 if "x" not in payload or "y" not in payload:
                     self.get_logger().error(f"Missing 'x' or 'y' in nav:{action}")
@@ -252,7 +252,7 @@ class NavCoordinator(Node):
                     self.nav_queue.append(task)
                 self.get_logger().info(f"Queued point '{name}' (laps={laps}). Queue size: {len(self.nav_queue)}")
 
-            # Массив точек (разворачиваем все круги в единый маршрут для скользящего окна)
+            # Waypoint array (unroll all laps into a single route for the sliding window)
             elif action in ["waypoints", "patrol", "follow_route"]:
                 pts = payload.get("points", [])
                 if not isinstance(pts, list) or not pts or len(pts) > 500:
@@ -290,7 +290,7 @@ class NavCoordinator(Node):
                         if all_poses:
                             prev = all_poses[-1].pose.position
                             cur = pose.pose.position
-                            # Убираем дублирующуюся точку на стыке кругов, если последняя точка круга совпадает с первой
+                            # Drop duplicate point at lap boundary if last point matches first
                             if math.hypot(cur.x - prev.x, cur.y - prev.y) < 0.20:
                                 continue
                         all_poses.append(pose)
@@ -307,7 +307,7 @@ class NavCoordinator(Node):
                 self.nav_queue.append(task)
                 self.get_logger().info(f"Queued route '{name}' ({len(parsed_pts)} pts x {laps} laps -> {len(all_poses)} waypoints). Queue size: {len(self.nav_queue)}")
 
-            # Добавить ОДНУ точку в локальный маршрут (для ручного построения)
+            # Append ONE point to the local route accumulator (manual route building)
             elif action == "add_to_route":
                 if "x" not in payload or "y" not in payload:
                     self.get_logger().error("Missing 'x' or 'y' in add_to_route")
@@ -326,7 +326,7 @@ class NavCoordinator(Node):
                 self.route_accumulator.append(pose)
                 self.get_logger().info(f"Point added to route. Total points in queue: {len(self.route_accumulator)}")
 
-            # Запустить накопленный маршрут
+            # Execute accumulated route
             elif action == "start_route":
                 if not self.route_accumulator:
                     self.get_logger().warn("Route is empty! Add points first.")
@@ -343,16 +343,16 @@ class NavCoordinator(Node):
                 self.active_task = task
                 self.nav_queue.append(task)
                 self.get_logger().info(f"Starting accumulated route with {len(self.route_accumulator)} points.")
-                self.route_accumulator.clear() # Очищаем накопитель после запуска
+                self.route_accumulator.clear() # Clear accumulator after starting
 
-            # Очистить накопленный маршрут
+            # Clear accumulated route
             elif action == "clear_route":
                 self.route_accumulator.clear()
                 self.get_logger().info("Accumulated route cleared.")
 
 
     def _create_pose(self, x, y, yaw):
-        """Вспомогательная функция создания PoseStamped"""
+        """Helper to construct a PoseStamped message."""
         p = PoseStamped()
         p.header.frame_id = 'map'
         p.pose.position.x = float(x)
@@ -363,7 +363,7 @@ class NavCoordinator(Node):
 
 
 def _send_sliding_window(node, navigator, rx, ry):
-    """Формирует и отправляет текущее скользящее окно точек в Nav2."""
+    """Build and dispatch the active waypoint sliding window to Nav2."""
     window_poses, indices = node.build_sliding_window(rx, ry)
     if not window_poses or indices == node.sw_last_sent_indices:
         return False
@@ -397,7 +397,7 @@ def main(args=None):
             rclpy.spin_once(navigator, timeout_sec=0.01)
             time.sleep(0.02)
 
-            # Обновляем координаты робота из штатного фидбека Nav2 (C++ bt_navigator)
+            # Update robot position from native Nav2 feedback (C++ bt_navigator)
             fb = navigator.getFeedback()
             if fb is not None and hasattr(fb, 'current_pose'):
                 cp = fb.current_pose.pose.position
@@ -405,7 +405,7 @@ def main(args=None):
                     node.robot_x = cp.x
                     node.robot_y = cp.y
 
-            # 1. Обновление скользящего окна вейпоинтов по текущей позиции робота
+            # 1. Advance sliding window based on current robot pose
             if node.sw_active and node.sw_poses:
                 rx, ry = node.get_robot_xy()
                 if rx is not None and node.sw_idx < len(node.sw_poses) - 1:
@@ -421,7 +421,7 @@ def main(args=None):
                     if advanced:
                         _send_sliding_window(node, navigator, rx, ry)
 
-            # 2. Проверка состояния задачи в Nav2
+            # 2. Poll active Nav2 task status
             if navigator.result_future:
                 if not navigator.result_future.done():
                     nav_state = "MOVING"
@@ -482,7 +482,7 @@ def main(args=None):
                 if nav_state == "MOVING" or node.sw_active or node.nav_paused:
                     continue 
 
-                # Для обычных задач (не rth) ждём, пока FSM безопасности перейдёт в разрешённое состояние
+                # For normal tasks (non-rth), wait until safety FSM enters an allowed state
                 next_cmd = node.nav_queue[0]['type']
                 if next_cmd != 'rth' and node.current_fsm_state not in ["NORMAL", "DISABLED", "UNKNOWN"]:
                     continue
@@ -499,7 +499,7 @@ def main(args=None):
                 node.get_logger().info(f"Starting task '{task.get('name', cmd)}'{lap_info}. Remaining in queue: {len(node.nav_queue)}")
                 
                 try:
-                    # Одиночная точка
+                    # Single point
                     if cmd == 'go_to':
                         pose = task['pose']
                         pose.header.stamp = navigator.get_clock().now().to_msg()
@@ -507,7 +507,7 @@ def main(args=None):
                         if bt: navigator.goToPose(pose, behavior_tree=bt)
                         else: navigator.goToPose(pose) 
                     
-                    # МАРШРУТ со скользящим окном вейпоинтов (Sliding Window)
+                    # ROUTE with waypoint sliding window
                     elif cmd == 'waypoints':
                         poses = task['poses']
                         if not poses:
@@ -522,7 +522,7 @@ def main(args=None):
                         node.sw_last_sent_indices = ()
 
                         rx, ry = node.get_robot_xy()
-                        # Если стартуем с 0-й точки и робот уже стоит на ней (< 0.65 м), сразу целимся во 2-ю точку
+                        # If starting from waypoint 0 and the robot is already on top of it (< 0.65 m), target waypoint 2 immediately
                         if node.sw_idx == 0 and rx is not None and len(poses) > 1:
                             p0 = poses[0].pose.position
                             d0 = math.hypot(p0.x - rx, p0.y - ry)
@@ -533,7 +533,7 @@ def main(args=None):
                                 )
                         _send_sliding_window(node, navigator, rx, ry)
                             
-                    # Домой
+                    # Return to home
                     elif cmd == 'rth':
                         pose = task['pose']
                         pose.header.stamp = navigator.get_clock().now().to_msg()

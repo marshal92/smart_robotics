@@ -22,23 +22,15 @@ setup(
     maintainer_email='proskurin1408@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
-    extras_require={
-        'test': [
-            'pytest',
-        ],
-    },
     entry_points={
         'console_scripts': [
             'radiation_manager = smart_radiation.radiation_manager:main',
             'radiation_field_server = smart_radiation.radiation_field_server:main',
             'baseline_field_server = smart_radiation.baseline_field_server:main',
-            'virtual_geiger = smart_radiation.virtual_geiger:main',
-            'dose_logger = smart_radiation.dose_logger:main',
             'generate_map = smart_radiation.generate_map:main',
             'view_map = smart_radiation.view_map:main',
             'radiation_mapper = smart_radiation.radiation_mapper:main',
-            'ground_truth_logger = smart_radiation.ground_truth_logger:main',
-            'radiation_run_logger = smart_radiation.radiation_run_logger:main',
+            'accurad_serial_node = smart_radiation.accurad_serial_node:main',
         ],
     },
 )

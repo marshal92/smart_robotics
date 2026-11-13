@@ -51,7 +51,7 @@
       <link name="environment_link">
         
         <collision name="Chunk_0_0_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_0.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_0.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -62,12 +62,12 @@
           </surface>
         </collision>
         <visual name="Chunk_0_0_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_0.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_0.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_0_1_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_1.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -78,12 +78,12 @@
           </surface>
         </collision>
         <visual name="Chunk_0_1_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_1.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_0_2_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_2.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -94,12 +94,12 @@
           </surface>
         </collision>
         <visual name="Chunk_0_2_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_2.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_0_3_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_3.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -110,12 +110,12 @@
           </surface>
         </collision>
         <visual name="Chunk_0_3_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_3.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_0_4_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_4.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_4.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -126,12 +126,12 @@
           </surface>
         </collision>
         <visual name="Chunk_0_4_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_4.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_4.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_0_5_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_5.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_5.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -142,12 +142,12 @@
           </surface>
         </collision>
         <visual name="Chunk_0_5_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_5.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_0_5.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_1_0_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_0.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_0.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -158,12 +158,12 @@
           </surface>
         </collision>
         <visual name="Chunk_1_0_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_0.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_0.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_1_1_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_1.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -174,12 +174,12 @@
           </surface>
         </collision>
         <visual name="Chunk_1_1_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_1.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_1_2_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_2.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -190,12 +190,12 @@
           </surface>
         </collision>
         <visual name="Chunk_1_2_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_2.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_1_3_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_3.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -206,12 +206,12 @@
           </surface>
         </collision>
         <visual name="Chunk_1_3_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_3.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_1_4_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_4.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_4.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -222,12 +222,12 @@
           </surface>
         </collision>
         <visual name="Chunk_1_4_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_4.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_4.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_1_5_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_5.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_5.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -238,12 +238,12 @@
           </surface>
         </collision>
         <visual name="Chunk_1_5_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_5.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_5.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_1_6_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_6.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_6.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -254,12 +254,12 @@
           </surface>
         </collision>
         <visual name="Chunk_1_6_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_6.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_1_6.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_2_0_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_0.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_0.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -270,12 +270,12 @@
           </surface>
         </collision>
         <visual name="Chunk_2_0_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_0.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_0.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_2_1_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_1.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -286,12 +286,12 @@
           </surface>
         </collision>
         <visual name="Chunk_2_1_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_1.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_2_2_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_2.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -302,12 +302,12 @@
           </surface>
         </collision>
         <visual name="Chunk_2_2_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_2.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_2_3_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_3.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -318,12 +318,12 @@
           </surface>
         </collision>
         <visual name="Chunk_2_3_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_3.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_2_4_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_4.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_4.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -334,12 +334,12 @@
           </surface>
         </collision>
         <visual name="Chunk_2_4_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_4.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_4.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_2_5_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_5.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_5.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -350,12 +350,12 @@
           </surface>
         </collision>
         <visual name="Chunk_2_5_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_5.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_5.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_2_6_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_6.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_6.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -366,12 +366,12 @@
           </surface>
         </collision>
         <visual name="Chunk_2_6_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_6.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_2_6.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_3_0_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_0.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_0.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -382,12 +382,12 @@
           </surface>
         </collision>
         <visual name="Chunk_3_0_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_0.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_0.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_3_1_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_1.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -398,12 +398,12 @@
           </surface>
         </collision>
         <visual name="Chunk_3_1_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_1.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_1.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_3_2_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_2.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -414,12 +414,12 @@
           </surface>
         </collision>
         <visual name="Chunk_3_2_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_2.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_2.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_3_3_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_3.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -430,12 +430,12 @@
           </surface>
         </collision>
         <visual name="Chunk_3_3_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_3.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_3_4_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_4.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_4.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -446,12 +446,12 @@
           </surface>
         </collision>
         <visual name="Chunk_3_4_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_4.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_4.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_3_5_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_5.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_5.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -462,12 +462,12 @@
           </surface>
         </collision>
         <visual name="Chunk_3_5_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_5.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_5.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="Chunk_3_6_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_6.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_6.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -478,12 +478,12 @@
           </surface>
         </collision>
         <visual name="Chunk_3_6_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_6.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/Chunk_3_6.stl</uri></mesh></geometry>
           <material><ambient>0.85 0.80 0.70 1</ambient><diffuse>0.85 0.80 0.70 1</diffuse></material>
         </visual>
         
         <collision name="zs_main_walls_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/zs_main_walls.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/zs_main_walls.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -494,12 +494,12 @@
           </surface>
         </collision>
         <visual name="zs_main_walls_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/zs_main_walls.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/zs_main_walls.stl</uri></mesh></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material>
         </visual>
         
         <collision name="lfsm3_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/lfsm3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/lfsm3.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -510,12 +510,12 @@
           </surface>
         </collision>
         <visual name="lfsm3_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/lfsm3.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/lfsm3.stl</uri></mesh></geometry>
           <material><ambient>0.8 0.35 0.0 1</ambient><diffuse>0.8 0.35 0.0 1</diffuse></material>
         </visual>
         
         <collision name="zs_pip_forset_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/zs_pip_forset.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/zs_pip_forset.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -526,7 +526,7 @@
           </surface>
         </collision>
         <visual name="zs_pip_forset_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/zs_pip_forset.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/zs_pip_forset.stl</uri></mesh></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material>
         </visual>
       </link>

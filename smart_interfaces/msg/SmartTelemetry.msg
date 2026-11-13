@@ -1,17 +1,17 @@
 std_msgs/Header header
 
-# Статусы систем
+# System states
 string fsm_state           # "NORMAL", "WARNING", "EVACUATING"
 string nav_status          # "IDLE", "MOVING", "ARRIVED"
 
-# Локомоция
+# Locomotion
 float32 linear_speed       # m/s
 float32 angular_speed      # rad/s
 
-# Полезная нагрузка и среда
+# Payload and environment
 float32 dose_rate          # uSv/h
-bool light_is_on           # Состояние фонаря
-string[] active_tools      # Список активных инструментов (например, ["lfcm_drill"])
+bool light_is_on           # Headlight relay state
+string[] active_tools      # List of active tools (e.g., ["lfcm_drill"])
 
-# На будущее
+# Reserved for future use
 float32 battery_voltage    # V

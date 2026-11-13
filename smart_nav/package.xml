@@ -15,7 +15,6 @@
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>smart_plugins</exec_depend>
   <exec_depend>smart_radiation_plugins</exec_depend>
-  <exec_depend>asymmetric_radiation_plugins</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

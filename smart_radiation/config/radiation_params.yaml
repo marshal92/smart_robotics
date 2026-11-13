@@ -1,24 +1,19 @@
-# Конфигурация параметров радиационной подсистемы (smart_radiation)
-# Можно редактировать до запуска или менять на лету через ros2 param set
+# Radiation subsystem parameters configuration (smart_radiation)
+# Can be edited before launch or updated dynamically via ros2 param set
 
 radiation_field_server:
   ros__parameters:
-    d_noise: 50.0     # Порог отсечения фонового шума (мкЗв/ч или мЗв/ч в зависимости от карты)
-    d_crit: 1000.0    # Критический порог дозы (штраф 100% -> C_max в Nav2 costmap)
-    k: 10.0           # Крутизна сигмоидной функции штрафа
+    d_noise: 50.0     # Background noise cutoff threshold (uSv/h or mSv/h depending on map)
+    d_crit: 1000.0    # Critical dose threshold (100% penalty -> C_max in Nav2 costmap)
+    k: 10.0           # Steepness of the sigmoid penalty function
 
 radiation_mapper:
   ros__parameters:
-    width: 800        # Ширина новой карты по умолчанию (клеток)
-    height: 800       # Высота новой карты по умолчанию (клеток)
-    res: 0.05         # Разрешение (м/клетка)
-    ox: -20.0         # Начало координат X (м)
-    oy: -20.0         # Начало координат Y (м)
-
-baseline_field_server:
-  ros__parameters:
-    radiation_threshold: 1000.0
-    radiation_cost: 95
+    width: 800        # Default new map width (cells)
+    height: 800       # Default new map height (cells)
+    res: 0.05         # Resolution (m/cell)
+    ox: -20.0         # Origin X (m)
+    oy: -20.0         # Origin Y (m)
 
 alara_speed_reflex_node:
   ros__parameters:

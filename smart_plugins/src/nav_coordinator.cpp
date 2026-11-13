@@ -9,8 +9,10 @@
 #include <nlohmann/json.hpp>
 
 #include <cmath>
+#include <chrono>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -30,6 +32,7 @@ struct NavTask {
   int total_laps{1};
   std::string name{"point"};
   size_t start_idx{0};
+  int reject_retries{0};
 };
 
 struct ResumeSnapshot {
@@ -111,8 +114,15 @@ private:
   std::vector<geometry_msgs::msg::PoseStamped> route_accumulator_;
 
   // Goal tracking (generation counter prevents stale result callbacks from overwriting newer goals)
+  static constexpr int kMaxRejectRetries{15};
+  static constexpr std::chrono::milliseconds kRejectRetryDelay{500};
+  static constexpr std::chrono::milliseconds kServerLostTimeout{2000};
+
   uint64_t current_goal_id_{0};
   bool goal_in_flight_{false};
+  rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
+  std::chrono::steady_clock::time_point retry_not_before_{};
+  std::optional<std::chrono::steady_clock::time_point> server_lost_since_;
 
   // ROS interfaces
   rclcpp::Subscription<smart_interfaces::msg::SmartCommand>::SharedPtr cmd_sub_;
@@ -232,6 +242,70 @@ private:
     }
   }
 
+  bool is_fsm_nav_allowed() const {
+    return current_fsm_state_ == "NORMAL" ||
+           current_fsm_state_ == "DISABLED" ||
+           current_fsm_state_ == "UNKNOWN";
+  }
+
+  void clear_navigation_state() {
+    nav_queue_.clear();
+    route_accumulator_.clear();
+    has_active_task_ = false;
+    reset_sliding_window();
+    nav_paused_ = false;
+    resume_snapshot_.valid = false;
+    retry_not_before_ = {};
+    server_lost_since_.reset();
+    cancel_requested_ = true;
+  }
+
+  void requeue_or_drop_active_task(const char * reason, const std::string & fail_state) {
+    if (sw_active_) {
+      if (has_active_task_) {
+        active_task_.start_idx = sw_idx_;
+      }
+      reset_sliding_window();
+    }
+
+    if (has_active_task_ && !cancel_requested_ && !nav_paused_ &&
+        active_task_.reject_retries < kMaxRejectRetries)
+    {
+      active_task_.reject_retries++;
+      RCLCPP_WARN(this->get_logger(),
+        "%s for '%s' (attempt %d/%d). Retrying in 500ms...",
+        reason, active_task_.name.c_str(), active_task_.reject_retries, kMaxRejectRetries);
+      nav_queue_.push_front(active_task_);
+      has_active_task_ = false;
+      retry_not_before_ = std::chrono::steady_clock::now() + kRejectRetryDelay;
+      nav_state_ = "IDLE";
+      return;
+    }
+
+    const std::string task_name = has_active_task_ ? active_task_.name : "unknown";
+    RCLCPP_ERROR(this->get_logger(),
+      "%s for '%s' permanently (state=%s). Dropping task.",
+      reason, task_name.c_str(), fail_state.c_str());
+    has_active_task_ = false;
+    nav_state_ = fail_state;
+  }
+
+  void handle_goal_response(uint64_t goal_id, bool accepted) {
+    if (goal_id != current_goal_id_) {
+      return;
+    }
+    server_lost_since_.reset();
+    if (accepted) {
+      if (has_active_task_) {
+        active_task_.reject_retries = 0;
+      }
+      return;
+    }
+
+    goal_in_flight_ = false;
+    requeue_or_drop_active_task("Nav2 rejected goal", "REJECTED");
+  }
+
   bool send_sliding_window() {
     std::vector<geometry_msgs::msg::PoseStamped> window_poses;
     std::vector<size_t> indices;
@@ -251,9 +325,15 @@ private:
 
     uint64_t goal_id = ++current_goal_id_;
     goal_in_flight_ = true;
+    server_lost_since_.reset();
     nav_state_ = "MOVING";
 
     rclcpp_action::Client<NavigateThroughPoses>::SendGoalOptions options;
+    options.goal_response_callback =
+      [this, goal_id](GoalHandleThroughPoses::SharedPtr goal_handle) {
+        handle_goal_response(goal_id, goal_handle != nullptr);
+      };
+
     options.feedback_callback =
       [this, goal_id](
         GoalHandleThroughPoses::SharedPtr,
@@ -302,9 +382,15 @@ private:
 
     uint64_t goal_id = ++current_goal_id_;
     goal_in_flight_ = true;
+    server_lost_since_.reset();
     nav_state_ = "MOVING";
 
     rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
+    options.goal_response_callback =
+      [this, goal_id](GoalHandleToPose::SharedPtr goal_handle) {
+        handle_goal_response(goal_id, goal_handle != nullptr);
+      };
+
     options.feedback_callback =
       [this, goal_id](
         GoalHandleToPose::SharedPtr,
@@ -337,29 +423,40 @@ private:
         size_t last_sent = sw_last_sent_indices_.empty() ? sw_idx_ : sw_last_sent_indices_.back();
         if (last_sent + 1 < sw_poses_.size()) {
           sw_idx_ = last_sent + 1;
-          send_sliding_window();
-          nav_state_ = "MOVING";
+          if (!send_sliding_window()) {
+            reset_sliding_window();
+            has_active_task_ = false;
+            nav_state_ = "SUCCEEDED";
+          } else {
+            nav_state_ = "MOVING";
+          }
         } else {
           RCLCPP_INFO(this->get_logger(),
             "Route '%s' FINISHED (%zu WPs, %d laps).",
             sw_name_.c_str(), sw_poses_.size(), sw_total_laps_);
           reset_sliding_window();
+          has_active_task_ = false;
           nav_state_ = "SUCCEEDED";
         }
       } else {
+        has_active_task_ = false;
         nav_state_ = "SUCCEEDED";
       }
     } else if (code == rclcpp_action::ResultCode::CANCELED) {
       reset_sliding_window();
+      has_active_task_ = false;
       nav_state_ = "CANCELED";
     } else if (code == rclcpp_action::ResultCode::ABORTED) {
       RCLCPP_WARN(this->get_logger(),
         "Nav2 task ABORTED! State saved — drive away and press RESUME to continue.");
       save_resume_state();
       reset_sliding_window();
+      has_active_task_ = false;
       nav_paused_ = true;
       nav_state_ = "ABORTED";
     } else {
+      reset_sliding_window();
+      has_active_task_ = false;
       nav_state_ = "IDLE";
     }
   }
@@ -437,15 +534,12 @@ private:
     const std::string target = to_lower_trimmed(msg->target_system);
     const std::string action = to_lower_trimmed(msg->command);
 
-    // 1. Global system stop commands
+    // 1. Global system stop / mode-switch commands
     if (target == "system") {
-      if (action == "stop" || action == "start_freeride" || action == "restart") {
-        RCLCPP_WARN(this->get_logger(), "[System] Navigation disabled globally. Clearing queues.");
-        nav_queue_.clear();
-        route_accumulator_.clear();
-        has_active_task_ = false;
-        reset_sliding_window();
-        cancel_requested_ = true;
+      if (action == "stop" || action == "restart" || action.rfind("start", 0) == 0) {
+        RCLCPP_WARN(this->get_logger(),
+          "[System] Navigation reset for command '%s'. Clearing queues.", action.c_str());
+        clear_navigation_state();
       }
       return;
     }
@@ -480,6 +574,8 @@ private:
       nav_queue_.clear();
       reset_sliding_window();
       nav_paused_ = false;
+      retry_not_before_ = {};
+      server_lost_since_.reset();
       cancel_requested_ = true;
       has_active_task_ = false;
       return;
@@ -487,7 +583,7 @@ private:
 
     // Resume
     if (action == "resume") {
-      if (current_fsm_state_ == "WARNING" || current_fsm_state_ == "EVACUATING") {
+      if (!is_fsm_nav_allowed()) {
         RCLCPP_WARN(this->get_logger(), "Cannot RESUME while safety FSM is in %s.", current_fsm_state_.c_str());
         return;
       }
@@ -502,6 +598,8 @@ private:
       ResumeSnapshot snap = resume_snapshot_;
       resume_snapshot_.valid = false;
       nav_paused_ = false;
+      retry_not_before_ = {};
+      server_lost_since_.reset();
       nav_queue_.clear();
 
       if (snap.type == "waypoints") {
@@ -514,8 +612,6 @@ private:
         resume_task.name = snap.name;
         resume_task.start_idx = snap.start_idx;
 
-        active_task_ = resume_task;
-        has_active_task_ = true;
         nav_queue_.push_back(resume_task);
         for (const auto & rem : snap.remaining_queue) {
           nav_queue_.push_back(rem);
@@ -525,8 +621,6 @@ private:
           "Command RESUME: continuing '%s' from WP %zu/%zu (Lap %d/%d).",
           resume_task.name.c_str(), snap.start_idx + 1, snap.poses.size(), cur_lap, resume_task.total_laps);
       } else if (snap.type == "single") {
-        active_task_ = snap.single_task;
-        has_active_task_ = true;
         nav_queue_.push_back(snap.single_task);
         for (const auto & rem : snap.remaining_queue) {
           nav_queue_.push_back(rem);
@@ -556,13 +650,15 @@ private:
       nav_queue_.clear();
       reset_sliding_window();
       nav_paused_ = false;
+      retry_not_before_ = {};
+      server_lost_since_.reset();
       cancel_requested_ = true;
       nav_queue_.push_back(rth_task);
       return;
     }
 
     // Safety FSM check for regular movement commands
-    if (current_fsm_state_ != "NORMAL" && current_fsm_state_ != "DISABLED") {
+    if (!is_fsm_nav_allowed()) {
       RCLCPP_WARN(this->get_logger(),
         "Restricted: system in state %s. Route rejected.", current_fsm_state_.c_str());
       return;
@@ -593,8 +689,6 @@ private:
         task.lap = lap;
         task.total_laps = laps;
         task.name = name;
-        active_task_ = task;
-        has_active_task_ = true;
         nav_queue_.push_back(task);
       }
       RCLCPP_INFO(this->get_logger(),
@@ -668,8 +762,7 @@ private:
       task.name = name;
       task.start_idx = 0;
 
-      active_task_ = task;
-      has_active_task_ = true;
+      nav_paused_ = false;
       nav_queue_.push_back(task);
       RCLCPP_INFO(this->get_logger(),
         "Queued route '%s' (%zu pts x %d laps -> %zu waypoints). Queue size: %zu",
@@ -704,8 +797,7 @@ private:
       task.name = "accumulated_route";
       task.start_idx = 0;
 
-      active_task_ = task;
-      has_active_task_ = true;
+      nav_paused_ = false;
       nav_queue_.push_back(task);
       RCLCPP_INFO(this->get_logger(),
         "Starting accumulated route with %zu points.", route_accumulator_.size());
@@ -729,10 +821,34 @@ private:
         nav_through_poses_client_->async_cancel_all_goals();
       }
       goal_in_flight_ = false;
+      retry_not_before_ = {};
+      server_lost_since_.reset();
       nav_state_ = "CANCELED";
       if (nav_queue_.empty()) {
         has_active_task_ = false;
       }
+    }
+
+    // 1b. Recover if Nav2 action server disappears while a goal is in flight
+    if (goal_in_flight_) {
+      const bool active_server_ready = sw_active_
+        ? nav_through_poses_client_->action_server_is_ready()
+        : nav_to_pose_client_->action_server_is_ready();
+      if (active_server_ready) {
+        server_lost_since_.reset();
+      } else {
+        const auto now = std::chrono::steady_clock::now();
+        if (!server_lost_since_.has_value()) {
+          server_lost_since_ = now;
+        } else if (now - *server_lost_since_ >= kServerLostTimeout) {
+          current_goal_id_++; // Invalidate stale callbacks
+          goal_in_flight_ = false;
+          server_lost_since_.reset();
+          requeue_or_drop_active_task("Nav2 action server lost mid-goal", "IDLE");
+        }
+      }
+    } else {
+      server_lost_since_.reset();
     }
 
     // 2. Advance Sliding Window based on current robot position
@@ -762,20 +878,22 @@ private:
     if (goal_in_flight_ || nav_state_ == "MOVING" || sw_active_ || nav_paused_) {
       return;
     }
-
-    const std::string & next_cmd = nav_queue_.front().type;
-    if (next_cmd != "rth" &&
-        current_fsm_state_ != "NORMAL" &&
-        current_fsm_state_ != "DISABLED" &&
-        current_fsm_state_ != "UNKNOWN")
-    {
+    if (std::chrono::steady_clock::now() < retry_not_before_) {
       return;
     }
 
-    // Non-blocking check for Nav2 action server availability
-    if (!nav_to_pose_client_->action_server_is_ready()) {
+    const std::string & next_cmd = nav_queue_.front().type;
+    if (next_cmd != "rth" && !is_fsm_nav_allowed()) {
+      return;
+    }
+
+    // Non-blocking check for target Nav2 action server availability
+    const bool server_ready = (next_cmd == "waypoints")
+      ? nav_through_poses_client_->action_server_is_ready()
+      : nav_to_pose_client_->action_server_is_ready();
+    if (!server_ready) {
       RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 5000, "Nav2 deactivated. Waiting...");
+        this->get_logger(), steady_clock_, 5000, "Nav2 deactivated. Waiting...");
       return;
     }
 
@@ -795,6 +913,8 @@ private:
       send_single_pose_goal(task.pose, task.bt);
     } else if (task.type == "waypoints") {
       if (task.poses.empty()) {
+        has_active_task_ = false;
+        nav_state_ = "IDLE";
         return;
       }
       sw_active_ = true;
@@ -816,7 +936,13 @@ private:
             d0, sw_poses_.size());
         }
       }
-      send_sliding_window();
+      if (!send_sliding_window()) {
+        RCLCPP_WARN(this->get_logger(),
+          "Route '%s' had no dispatchable waypoints. Resetting.", task.name.c_str());
+        reset_sliding_window();
+        has_active_task_ = false;
+        nav_state_ = "IDLE";
+      }
     } else if (task.type == "rth") {
       send_single_pose_goal(task.pose, bt_survival_);
     }

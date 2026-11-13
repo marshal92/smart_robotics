@@ -2,36 +2,36 @@ import cv2
 import numpy as np
 import yaml
 
-# 1. Задаем пути к файлам
-map_image_path = 'shelter_zero_empty_1.pgm' # или .png, если конвертировал
+# 1. Specify file paths
+map_image_path = 'shelter_zero_empty_1.pgm' # or .png if converted
 map_yaml_path = 'shelter_zero_empty_1.yaml'
 
-# 2. Достаем разрешение (resolution) из yaml файла
+# 2. Extract map resolution from YAML file
 try:
     with open(map_yaml_path, 'r') as file:
         map_info = yaml.safe_load(file)
         resolution = map_info['resolution']
 except FileNotFoundError:
-    print(f"YAML файл не найден. Использую стандартное разрешение 0.05")
+    print("YAML file not found. Using default resolution 0.05")
     resolution = 0.05
 
-# 3. Загружаем картинку в градациях серого
+# 3. Load grayscale map image
 img = cv2.imread(map_image_path, cv2.IMREAD_GRAYSCALE)
 
 if img is None:
-    print(f"Ошибка: не удалось загрузить изображение {map_image_path}")
+    print(f"Error: failed to load image {map_image_path}")
     exit()
 
-# 4. Считаем свободные пиксели. 
-# В ROS белый цвет - это 254. Берем диапазон 250-255 на случай мелких артефактов сжатия.
+# 4. Count free pixels.
+# In ROS maps, free space is 254. Use 250-255 range to absorb minor compression artifacts.
 free_pixels = np.sum(img >= 250)
 
-# 5. Математика
+# 5. Compute area
 pixel_area = resolution * resolution
 total_area = free_pixels * pixel_area
 
-print("=== РЕЗУЛЬТАТЫ ПОДСЧЕТА ===")
-print(f"Разрешение карты: {resolution} м/пиксель")
-print(f"Площадь одного пикселя: {pixel_area:.6f} кв.м")
-print(f"Найдено свободных пикселей: {free_pixels}")
-print(f"Итоговая площадь комнаты: {total_area:.3f} квадратных метров")
+print("=== AREA CALCULATION RESULTS ===")
+print(f"Map resolution: {resolution} m/pixel")
+print(f"Single pixel area: {pixel_area:.6f} sq.m")
+print(f"Free pixels found: {free_pixels}")
+print(f"Total room area: {total_area:.3f} sq.m")

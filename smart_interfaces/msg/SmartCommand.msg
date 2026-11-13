@@ -1,9 +1,9 @@
-# Кому адресован приказ (например: "system", "nav", "payload", "waypoints")
+# Target subsystem (e.g., "system", "nav", "payload", "waypoints")
 string target_system
 
-# Сама команда (например: "start", "stop", "go_to", "rth", "save")
+# Command name (e.g., "start", "stop", "go_to", "rth", "save")
 string command
 
-# Дополнительные данные (координаты X, Y, Yaw или имя точки, упакованные в JSON)
-# Если доп. данных нет, шлем пустую строку ""
+# Additional payload data (coordinates X, Y, Yaw or waypoint name encoded as JSON)
+# Send an empty string "" when no additional payload is required
 string payload_json

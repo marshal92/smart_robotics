@@ -27,10 +27,10 @@ public:
         // Publisher
         pub_ = this->create_publisher<smart_interfaces::msg::SmartTelemetry>("/smart_telemetry", 10);
         
-        // Timer 5Hz (200 мс)
+        // Timer 5Hz (200 ms)
         timer_ = this->create_wall_timer(std::chrono::milliseconds(200), std::bind(&TelemetryMuxCpp::timer_cb, this));
 
-        RCLCPP_INFO(this->get_logger(), "C++ Telemetry Mux Запущен: агрегация данных 5Hz");
+        RCLCPP_INFO(this->get_logger(), "C++ Telemetry Mux started: aggregating telemetry at 5Hz");
     }
 
 private:

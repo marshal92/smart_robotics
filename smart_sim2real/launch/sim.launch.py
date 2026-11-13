@@ -33,12 +33,18 @@ def generate_launch_description():
     use_arm_arg = DeclareLaunchArgument('use_arm', default_value='false')
     use_arm = LaunchConfiguration('use_arm')
 
-    set_model_path = AppendEnvironmentVariable('GZ_SIM_RESOURCE_PATH', PathJoinSubstitution([pkg_sim, 'models']))
-
-    # Gazebo, find where to look for the manipulator_description package (we go up one level in the share folder)
+    # Gazebo, find where to look for package:// URDF meshes (parent of each package's share dir)
     set_mesh_path = AppendEnvironmentVariable(
         'GZ_SIM_RESOURCE_PATH', 
         PathJoinSubstitution([FindPackageShare('manipulator_description'), '..'])
+    )
+    set_ugv_mesh_path = AppendEnvironmentVariable(
+        'GZ_SIM_RESOURCE_PATH',
+        PathJoinSubstitution([FindPackageShare('ugv_tracked_description'), '..'])
+    )
+    set_sim_mesh_path = AppendEnvironmentVariable(
+        'GZ_SIM_RESOURCE_PATH',
+        PathJoinSubstitution([FindPackageShare('smart_sim2real'), '..'])
     )
 
     gazebo_server = IncludeLaunchDescription(
@@ -183,7 +189,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        set_model_path, world_arg, gui_arg, use_3d_lidar_arg, god_mode_arg, set_mesh_path, use_arm_arg,
+        world_arg, gui_arg, use_3d_lidar_arg, god_mode_arg, set_mesh_path, set_ugv_mesh_path, set_sim_mesh_path, use_arm_arg,
         spawn_x_arg, spawn_y_arg, spawn_yaw_arg, 
         gazebo_server, gazebo_client, rsp_node, spawn_node, bridges_node,
         gz_bridge_2d_node, 

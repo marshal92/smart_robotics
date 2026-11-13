@@ -40,7 +40,8 @@ def generate_launch_description():
         package='smart_plugins',
         executable='nav_coordinator',
         name='nav_coordinator',
-        output='screen'
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}]
     )
 
     payload_manager_node = Node(

@@ -181,11 +181,11 @@ class WaypointManager(Node):
             if wp.get("type") == "route":
                 marker.pose.position.x = float(wp['points'][0][0])
                 marker.pose.position.y = float(wp['points'][0][1])
-                marker.color.r, marker.color.g, marker.color.b = 0.8, 0.2, 0.8 # Фиолетовый для маршрутов
+                marker.color.r, marker.color.g, marker.color.b = 0.8, 0.2, 0.8 # Purple for routes
             else:
                 marker.pose.position.x = float(wp['x'])
                 marker.pose.position.y = float(wp['y'])
-                marker.color.r, marker.color.g, marker.color.b = 0.0, 0.7, 1.0 # Синий для точек
+                marker.color.r, marker.color.g, marker.color.b = 0.0, 0.7, 1.0 # Blue for points
                 
             marker.pose.position.z = 0.1
             marker.scale.x = 0.3

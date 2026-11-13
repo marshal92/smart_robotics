@@ -101,7 +101,7 @@ class SafetyWatchdog(Node):
             self.evacuation_start_time = now 
             self.cmd_pub.publish(SmartCommand(target_system='nav', command='cancel'))
             time.sleep(0.5)
-            # Экстренный RTH
+            # Emergency RTH
             payload = json.dumps({"x": 0.0, "y": 0.0, "yaw": 0.0})
             self.cmd_pub.publish(SmartCommand(target_system='nav', command='rth', payload_json=payload))
             

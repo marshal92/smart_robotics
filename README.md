@@ -1,249 +1,256 @@
-# Smart Robotics
+# Smart Robotics (ROS 2 Jazzy)
 
-Архитектура супервизийного контроля для автономных мобильных роботов, предназначенная для работы в радиационно опасных средах и других сложных условиях.
+Supervisory control architecture for autonomous mobile robots and 6-DOF manipulators built on **ROS 2 Jazzy**, designed for radiation-hazardous environments and degraded/intermittent communications.
 
----
-
-## Архитектура системы (3 уровня)
-
-Система построена по трехуровневой модели, обеспечивающей разделение зон ответственности, отказоустойчивость и безопасность при потере связи.
-
-1. **Edge (Периферия / Микроконтроллер)**  
-   Использует **micro-ROS**. Отвечает за жесткий real-time: прямое управление моторами шасси, манипулятором и сбор сырых данных с датчиков.
-
-2. **Fog (Бортовой компьютер робота)**  
-   Ядро автономности робота. Развернут изолированный DDS (CycloneDDS без shared memory). Здесь работают критически важные процессы: навигационный стек, SLAM, сборка дерева трансформаций (TF) и узлы контроля миссий (`smart_control`).
-
-3. **Cloud (Сервер оператора)**  
-   Супервизия и тяжелые вычисления. Запускает ресурсоемкие процессы, некритичные для выживания робота: MoveIt (манипуляция), ИИ (YOLO, Whisper LLM, Semantic Dispatcher), веб-сервер для UI и систему **Shadow Mode** для управления роботом независимо от качества связи.
+The system integrates **Nav2 (MPPI + Lifelong SLAM)**, the **ALARA** radiation-aware navigation stack (`smart_radiation` + C++ `smart_radiation_plugins`), a unified `/smart_command` fault-tolerant command bus, **Gazebo Sim (`smart_sim2real`)**, and the **Web UI 2.0** 3D Digital Twin interface (`Vue 3 + Vite + Three.js`).
 
 ---
 
-## Связь и маршрутизация (Zenoh Bridge)
+## Table of Contents
 
-Связь между роботом (**Fog**) и сервером (**Cloud**) обеспечивается через **Zenoh Bridge**. Мост настроен на жесткую фильтрацию топиков, чтобы не забивать канал потоками данных DDS, не участвующими во внешнем взаимодействии. Это обеспечивает надежность DDS внутри робота даже в случае полного обрыва связи с сервером.
-
-**Белый список топиков (Разрешены для обмена через мост):**
-*   **Команды:** `/cmd_vel`, `/cmd_light`, `/smart_command`
-*   **Телеметрия:** `/smart_telemetry`, `/operator_heartbeat`
-*   **Локализация и Цели:** `/initialpose`, `/goal_pose`, `/clicked_point`, `/odom`
-*   **Вейпоинты:** `/waypoints_list`, `/smart_waypoints_markers`
-*   **Картография:** `/map`, `/map_updates`, `/radiation_map`, `/global_costmap/costmap`
-*   **Трансформации:** `/tf`, `/tf_static`, `/robot_description`
-*   **Визуализация:** `/camera/image_raw/compressed`, `/plan`, `/rosout`
-
----
-
-## Запуск системы
-
-Ядро аппаратно-независимо. Точкой входа является метапакет `smart_master`, содержащий `full_system.urdf.xacro`, объединяющий шасси робота (например, гусеничную базу) и навесное оборудование (манипулятор) из сторонних пакетов.
-
-### На роботе (Fog)
-Запуск выполняется скриптом `start_robot.sh` (в сессии `tmux`), который стартует:
-1. Агент micro-ROS (связь с Edge)
-2. Мост Zenoh (клиент, подключение к Cloud)
-3. Основной лаунч: `real_master.launch.py`, который в свою очередь запускает:
-   - Драйверы железа, камера, лидар (`hardware.launch.py`)
-   - Узлы управления (`control_core.launch.py`)
-   - Узлы состояния робота (`robot_state_publisher`, `joint_state_publisher`)
-   - Радиационные узлы (`radiation_field_server`, `alara_speed_reflex_node`)
-
-### На сервере (Cloud)
-Запуск выполняется скриптом `start_server.sh` (в сессии `tmux`):
-1. Мост Zenoh (сервер, слушает порт `7447`)
-2. Веб-сервер (пользовательский интерфейс)
-3. Основной лаунч: `server.launch.py`, который запускает:
-   - `twin_orchestrator.py` (управление процессами на сервере через веб)
-   - `heartbeat_pub.py` (публикация пульса оператора для watchdog робота)
-   - `shadow_mode` (модуль телеуправления)
-   - `sdf_visualizer_node.py` (цифровой двойник помещения для интерфейса)
+1. [Three-Tier Architecture (Edge / Fog / Cloud)](#1-three-tier-architecture-edge--fog--cloud)
+2. [Repository Layout and ROS 2 Packages](#2-repository-layout-and-ros-2-packages)
+3. [Communications and Routing (CycloneDDS + Zenoh Bridge)](#3-communications-and-routing-cyclonedds--zenoh-bridge)
+4. [Build and Quick Start](#4-build-and-quick-start)
+5. [Control Architecture, Navigation, and Shadow Mode](#5-control-architecture-navigation-and-shadow-mode)
+6. [ALARA Radiation Subsystem](#6-alara-radiation-subsystem)
+7. [Manipulator Control (MoveIt 2 / Servo / 2.5D Manual)](#7-manipulator-control-moveit-2--servo--25d-manual)
+8. [Web UI 2.0 and 3D Digital Twin](#8-web-ui-20-and-3d-digital-twin)
+9. [Unified Command Bus (`/smart_command`) and Telemetry (`/smart_telemetry`)](#9-unified-command-bus-smart_command-and-telemetry-smart_telemetry)
 
 ---
 
-## Система управления (`smart_control` & `smart_interfaces`)
+## 1. Three-Tier Architecture (Edge / Fog / Cloud)
 
-Вся коммуникация через мост строится вокруг агрегированных сообщений `SmartCommand.msg` и `SmartTelemetry.msg`.  
-**Важно:** Все исполнительные узлы работают строго на роботе. Мост передает только высокоуровневые приказы от сервера.
+```text
+  [Edge: ESP32-S3] <──USB Serial──▶ [micro_ros_agent]
+                                           │
+                                    [Fog: Onboard Robot]
+                        (CycloneDDS: control_core, Nav2, SLAM,
+                         telemetry_mux, trajectory_bridge, radiation)
+                                           │
+                          Zenoh Bridge (TCP :7447, Allowlist)
+                                           │
+                                  [Cloud: Operator Station]
+                    ┌──────────────────────┴──────────────────────┐
+                    ▼                                             ▼
+      rosbridge_websocket (:9090)                    HTTP web_server (:8080)
+                    └──────────────▶ Web UI 2.0 (Vue 3 + Three.js)
+                     + On-demand: MoveIt 2, MoveIt Servo, Shadow Mode, AI
+```
 
-*   **`mission_manager.py`**: Глобальный оркестратор робота. Принимает команды через мост, управляет жизненным циклом нод (например, запускает `bringup_lifelong` с нужной картой внутри tmux).
-*   **`nav_coordinator.py`**: Контроллер навигации. Принимает координаты или сложные маршруты из `SmartCommand` и перенаправляет их в Action-серверы Nav2.
-*   **`waypoint_manager.py`**: Локальное хранилище вейпоинтов на роботе. Публикует список в `/waypoints_list` для чтения веб-интерфейсом.
-*   **`safety_watchdog.py`**: Узел безопасности. Мониторит топик `/operator_heartbeat`. В случае длительной потери связи инициирует алгоритмы выживания (эвакуация, остановка).
-*   **`payload_manager.py`**: Управление механизмами, деревьями поведения и шаблонами (например, запуск скрипта взятия проб).
-*   **`tactical_executor.py`**: [НОВОЕ] Локальный тактический исполнитель на роботе. Берет на себя прямые команды движения (вперед, назад, поворот, следование) и локально проверяет препятствия через `/scan`, останавливаясь перед ними, оберегая робота при отключенном Nav2.
-*   **`telemetry_mux.cpp`**: Мультиплексор на C++, собирает данные от разных систем и упаковывает их в компактное сообщение `SmartTelemetry.msg` для отправки на сервер.
-
----
-
-## Навигация (`smart_nav`)
-
-Использует Nav2 (Lifelong SLAM) и локальный планировщик MPPI. Стратегия опирается на априорный граф (созданный по BIM-моделям), где стены выступают "якорями", а скользящий граф (Sliding Window) добавляет динамические препятствия, не допуская бесконечного разрастания карты и тормозов.
-
-*   **Режим картографирования:** `bringup_mapping.launch.py` (запускает `slam_mapping.launch.py` + Nav2). Сохраняет итоговый граф.
-*   **Рабочий режим:** `bringup_lifelong.launch.py` (запускает `slam_lifelong.launch.py` + Nav2 + карту). Обеспечивает точную локализацию и холодный старт.
-
----
-
-## Радиационный слой ALARA (`smart_radiation` & `smart_plugins`)
-
-Система реализует принцип ALARA (As Low As Reasonably Achievable), минимизируя накопленную дозу робота.
-
-
-
-1. **Генерация:** Скрипт `generate_map.py` генерирует радиационную матрицу `.npy`.
-2.  **Создание и обновление карт (`radiation_mapper.py`):** Онлайн-построитель радиационных карт. В режиме реального времени принимает данные о мощности дозы с сенсоров и накладывает их на 2D-сетку (Alpha-Blending). Работает с `.npy` массивами. Автоматически сохраняет прогресс (раз в 60 сек) во избежание потери данных.
-3.  **Виртуальный сенсор (`virtual_geiger.py`):** Программный эмулятор счетчика Гейгера для симуляции (или когда реального датчика еще нет). Читает базовую (эталонную) карту, отслеживает координаты робота через TF и транслирует "реальную" мощность дозы (`dose_rate`) в систему.
-4.  **Нормализация (`radiation_field_server.py`):** Узел читает `.npy` карту, отсекает шумы и прогоняет данные через **сигмоиду**, преобразуя абсолютные дозы в навигационные `OccupancyGrid` (штрафы от 0 до 100). Для настройки лимитов и визуализации сигмоиды используется утилита `view_map.py`.
-5. **Глобальное планирование:** Кастомный плагин Nav2 `radiation_layer.cpp` интегрирован в Global Costmap. Он накладывает радиационные штрафы поверх статической карты методом `std::max()`. Это предотвращает образование "непроходимых плато", позволяя роботу проезжать через радиацию (если другого пути нет), но активно планировать более безопасные маршруты в обход.
-6.  **Скоростной рефлекс (`alara_speed_reflex_node`):** Динамический контроллер скорости для минимизации дозы. В обычном (чистом) режиме робот движется с ограничением скорости (например, 35%). При въезде в зону с высоким радиационным фоном узел мгновенно публикует в `/speed_limit` разрешение на максимальную скорость (100%). Робот "проскакивает" опасный участок, оставляя безопасность маневрирования локальному планировщику (MPPI/TEB).
-7.  **Zero-CPU Hibernation:** Все узлы (сервер, маппер, гейгер) управляются через ROS-параметры (`is_active`, `is_recording`). Если влияние радиации отключено, узлы переходят в спящий режим (`rclpy.spin`), потребляя 0.0% ресурсов CPU.
+1. **Edge (MCU Peripheral / ESP32-S3):** Runs **micro-ROS** (`micro_ros_agent serial --dev /dev/esp32s3`), handling low-level chassis and manipulator actuation (`/arm/servo_cmd`, `/arm/joint_states_raw`).
+2. **Fog (Onboard Robot Computer):** Isolated CycloneDDS domain (`rmw_cyclonedds_cpp`) running autonomy- and safety-critical nodes: hardware drivers, `smart_control` + C++ `smart_plugins`, Nav2 / SLAM Toolbox, and the ALARA radiation subsystem (`smart_radiation` / `smart_radiation_plugins`).
+3. **Cloud (Operator Workstation / Server):** Supervision and heavy compute: `rosbridge_websocket`, multi-threaded HTTP server `web_server`, map image encoding (`map_to_image`), 3D environment visualization (`sdf_visualizer`), Shadow Mode (`shadow_teleop_real` / `shadow_teleop_sim`), manipulator orchestrator `twin_orchestrator` (launches MoveIt 2 / Servo on demand), and the optional AI stack (`smart_ai`).
 
 ---
 
-## Shadow Mode (Телеуправление при плохой связи)
+## 2. Repository Layout and ROS 2 Packages
 
-Система **Теневого управления** (`shadow_teleop_real.py`) предназначена для работы при разрывах связи и задержках:
-1.  Оператор в веб-интерфейсе управляет "виртуальной тенью" робота.
-2.  Тень перемещается локально на сервере, используя копию глобального costmap-а (предотвращая столкновения с виртуальными препятствиями).
-3.  Во время движения тень накапливает массив проверенных вейпоинтов (Pose-трек).
-4.  По команде `execute` весь записанный трек упаковывается в `SmartCommand` и отправляется через Zenoh Bridge на робота (в `nav_coordinator`).
-5.  Робот автономно и безопасно проезжает выверенный оператором маршрут.
-
----
-
-## Симуляция и Цифровой двойник (`smart_sim2real`)
-
-Модуль симуляции критически важен для генерации *априорного графа*. Точная BIM-модель помещения конвертируется в SDF (Gazebo) через Blender. В симуляторе (с идеальной одометрией) робот "обкатывает" карту и сохраняет Pose-граф, который затем загружается на реального робота для работы.
-
-* Запускается через мета-лаунч `sim_master.launch.py` (поднимает сразу `control_core`, `server.launch.py` и `sim.launch.py`).
-* В качестве основы используется `sim_wrapper.urdf.xacro` (на базе `full_system.urdf.xacro`), обогащенный плагинами Gazebo.
-
-**SDF из BIM:** Точная BIM-модель помещения оптимизируется и конвертируется в SDF-мир Gazebo с помощью Python-скрипта в Blender.
-**Холодный старт Nav2:** В симуляторе (в режиме идеальной одометрии) робот "обкатывает" SDF-карту и сохраняет Pose-граф, который затем загружается на реального робота.
-**Цифровой двойник (`sdf_visualizer_node.py`):** Узел на сервере транслирует SDF-модель помещения в массив маркеров `MarkerArray`. Это позволяет оператору в веб-интерфейсе видеть не просто плоскую 2D-карту, а 3D-окружение (стены, проемы) для улучшенной пространственной ориентации. Запускается в паре со скриптами веб-интерфейса (`Infrastructure_as_Code/web_interface`).
+| Package / Directory | Type | Purpose |
+|---|---|---|
+| [`smart_interfaces`](smart_interfaces/CMakeLists.txt) | `ament_cmake` (`rosidl`) | Custom messages [`SmartCommand.msg`](smart_interfaces/msg/SmartCommand.msg) and [`SmartTelemetry.msg`](smart_interfaces/msg/SmartTelemetry.msg) |
+| [`smart_master`](smart_master/CMakeLists.txt) | `ament_cmake` | Top-level URDF assembly [`full_system.urdf.xacro`](smart_master/urdf/full_system.urdf.xacro) and master launches [`sim_master.launch.py`](smart_master/launch/sim_master.launch.py), [`real_master.launch.py`](smart_master/launch/real_master.launch.py) |
+| [`smart_control`](smart_control/setup.py) | `ament_python` | Mission lifecycle, waypoint storage, safety watchdog, relocalization, and tactical maneuvers ([`control_core.launch.py`](smart_control/launch/control_core.launch.py)) |
+| [`smart_plugins`](smart_plugins/CMakeLists.txt) | `ament_cmake` (C++) | Real-time C++ core nodes: `nav_coordinator`, `telemetry_mux`, `trajectory_bridge`, `stabilized_frame_publisher_node` |
+| [`smart_nav`](smart_nav/CMakeLists.txt) | `ament_cmake` | Nav2 (MPPI + `RadiationLayer`) and SLAM Toolbox configs ([`nav2_params.yaml`](smart_nav/config/nav2_params.yaml)), mapping/lifelong launches, and `maps/` |
+| [`smart_radiation`](smart_radiation/setup.py) | `ament_python` | Radiation lifecycle (`radiation_manager`), sigmoid field server (`radiation_field_server`), AccuRad serial driver (`accurad_serial_node`), map generators/viewers, and experiment logger |
+| [`smart_radiation_plugins`](smart_radiation_plugins/CMakeLists.txt) | `ament_cmake` (C++) | Nav2 costmap plugin `smart_radiation_plugins::RadiationLayer` plus C++ nodes `radiation_mapper_node`, `virtual_geiger_node`, `alara_speed_reflex_node` |
+| [`smart_server`](smart_server/setup.py) | `ament_python` | Cloud infrastructure: `web_server`, `rosbridge_websocket`, `twin_orchestrator`, `map_to_image`, `shadow_teleop_*`, `sdf_visualizer`, `heartbeat_pub`; on-demand manipulator launches |
+| [`smart_sim2real`](smart_sim2real/CMakeLists.txt) | `ament_cmake` | Gazebo Sim setup ([`sim.launch.py`](smart_sim2real/launch/sim.launch.py)), [`sim_wrapper.urdf.xacro`](smart_sim2real/urdf/sim_wrapper.urdf.xacro), `ros_gz_bridge`, EKF (`robot_localization`), and SDF worlds |
+| [`smart_moveit_config`](smart_moveit_config/package.xml) | `ament_cmake` | MoveIt 2 and MoveIt Servo configuration (`SRDF`, kinematics, controllers, `servo_config.yaml`) used by `arm_moveit.launch.py` and `arm_servo.launch.py` |
+| [`smart_ai`](smart_ai/setup.py) | `ament_python` | Voice control (`voice_listener_node` / Faster-Whisper), LLM/RegEx dispatcher (`semantic_dispatcher_node`), YOLO detection (`yolo_publisher`), and Visual Servoing (`spatial_projector_node`) |
+| [`smart_sandbox`](smart_sandbox/setup.py) | `ament_python` | Experimental evaluation loggers and MPPI / trajectory analysis scripts |
+| [`Infrastructure_as_Code`](Infrastructure_as_Code/COLCON_IGNORE) | Non-ROS dir (`COLCON_IGNORE`) | PyQt6 launcher `smart_launcher.py`, tmux autostart scripts, CycloneDDS configs, 4WD Xacro configs, and [`web_ui_2.0`](Infrastructure_as_Code/web_ui_2.0/README.md) frontend |
 
 ---
 
-## Манипуляция (`smart_moveit_config`)
-Автогенерируемый пакет конфигурации MoveIt 2. Настраивается на базу `full_system.urdf.xacro`. *(В процессе интеграции: сейчас работает в симуляции и при прямом подключении; планируется полная маршрутизация траекторий через мост).*
+## 3. Communications and Routing (CycloneDDS + Zenoh Bridge)
+
+Communication between the onboard computer (**Fog**) and the operator station (**Cloud**) uses a **Zenoh Bridge (`zenoh-bridge-dds`)** TCP tunnel on port `7447` with multicast disabled (`--no-multicast-scouting`) and explicit topic allowlisting in [`start_robot.sh`](Infrastructure_as_Code/autostart/start_robot.sh) and [`start_server.sh`](Infrastructure_as_Code/autostart/start_server.sh):
+
+* **Control & Commands:** `/cmd_vel`, `/cmd_light`, `/smart_command`, `/initialpose`, `/goal_pose`, `/clicked_point`
+* **Telemetry & Status:** `/smart_telemetry`, `/operator_heartbeat`, `/waypoints_list`, `/smart_waypoints_markers`, `/radiation/status`, `/rosout`
+* **Mapping & TF:** `/tf`, `/tf_static`, `/robot_description`, `/map`, `/map_updates`, `/radiation_map`, `/radiation_image/compressed`, `/plan`
+* **Camera & Manipulator:** `/camera/image_raw/compressed`, `/arm_joint_states`, `/arm_controller/joint_trajectory`, plus action topics under `arm_controller/follow_joint_trajectory`
+
+When operating with the real robot (`use_sim_time:=false`), [`server.launch.py`](smart_server/launch/server.launch.py) spawns local `robot_state_publisher` (remapping `/tf` -> `/tf_server_local`) and `joint_state_publisher` (`source_list: ['/arm_joint_states']`) instances on the server so Web UI 2.0 and MoveIt obtain URDF descriptions locally without flooding the Zenoh link.
 
 ---
 
-## ИИ и Распознавание (`smart_ai`)
-Слой Cloud AI был полностью переработан для интеграции с архитектурой `SmartCommand` и распределения нагрузки:
-*   **`voice_listener_node.py`**: Облегченный аудио-сенсор. Слушает микрофон, использует Faster-Whisper, выделяет слова-триггеры и отправляет сырой текст в FSM.
-*   **`semantic_dispatcher_node.py`**: Центральный роутер ИИ (Машина Состояний). Парсит намерения (через RegEx или обращаясь к LLM) и выдает жесткие команды `SmartCommand` на робота.
-*   **`yolo_publisher.py`**: Публикует легкий JSON массив обнаруженных объектов и их отклонений от центра камеры в `/ai/vision_targets`.
-*   **`spatial_projector_node.py`**: Мост между CV (Зрением) и Тактикой. При запросе от Диспетчера захватывает нужный объект из JSON-потока YOLO и генерирует высокочастотные корректирующие `SmartCommand` (`track_target`) для `tactical_executor`, реализуя Visual Servoing.
+## 4. Build and Quick Start
+
+### Build ROS 2 Workspace and Web UI Frontend
+
+```bash
+cd ~/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install
+source ~/ros2_ws/install/setup.bash
+
+# Build Web UI 2.0 production bundle (dist/ served by smart_server/web_server.py)
+bash ~/ros2_ws/src/smart_robotics/Infrastructure_as_Code/web_ui_2.0/build_ui.sh
+```
+
+### Graphical Operator Launcher (Recommended)
+
+```bash
+python3 ~/ros2_ws/src/smart_robotics/Infrastructure_as_Code/autostart/smart_launcher.py
+```
+
+[`smart_launcher.py`](Infrastructure_as_Code/autostart/smart_launcher.py) (PyQt6 + `QWebEngineView`) provides two operational tabs:
+* **Simulation (Sim2Real):** launches `sim_master.launch.py` inside the `sim_session` tmux session with selectable worlds (`worlds/*.sdf`), Gazebo GUI toggle, manipulator (`use_arm`), 3D LiDAR (`use_3d_lidar` + `stabilize_lidar`), and `god_mode`.
+* **Real Robot:** launches `start_robot.sh` (`robot` tmux session) on the robot over SSH and `start_server.sh` (`smart_server` tmux session) locally.
+
+### Manual CLI Launch
+
+**Simulation (Full Stack):**
+```bash
+ros2 launch smart_master sim_master.launch.py \
+  world:=213.sdf gui:=false use_arm:=true use_3d_lidar:=false god_mode:=false
+```
+
+**Real Robot and Operator Server:**
+```bash
+# On the robot onboard computer:
+bash ~/ros2_ws/src/smart_robotics/Infrastructure_as_Code/autostart/start_robot.sh true
+
+# On the operator station (IP_ROBOTA is configured in start_server.sh):
+bash ~/ros2_ws/src/smart_robotics/Infrastructure_as_Code/autostart/start_server.sh true
+```
+
+**Web Interface & Rosbridge Endpoints:**
+* HTTP (Web UI 2.0): `http://<server-ip>:8080`
+* WebSocket (`rosbridge_websocket`): `ws://<server-ip>:9090`
 
 ---
 
-## Веб-интерфейс и 3D Цифровой Двойник (UI API)
-Веб-интерфейс (находится в `Infrastructure_as_Code /web_ui`) написан на современном стеке **Vue 3 + Vite** и использует **rosbridge_server (WebSockets)** для общения с роботом, а также **ros3djs / three.js** для рендеринга 3D-сцен. Подробная техническая спецификация фронтенда находится в [локальном README веб-папки](Infrastructure_as_Code\ /web_ui/README.md).
+## 5. Control Architecture, Navigation, and Shadow Mode
 
-Архитектура бэкенда для поддержки веб-интерфейса включает в себя несколько ключевых узлов:
-*   **`web_server.py`** (`smart_server`): Выполняет роль легковесного HTTP-сервера. Раздает скомпилированные файлы интерфейса (папку `dist`), а также служит файловым сервером для загрузки 3D-моделей (STL) робота и статических карт в браузер.
-*   **`map_to_image.py`** (`smart_server`): Утилита, отвечающая за конвертацию тяжелой сетки вероятностей (OccupancyGrid) в сжатые форматы изображений, чтобы быстро транслировать их по сети в веб-интерфейс без перегрузки браузера парсингом огромных массивов.
-*   **`radiation_field_server.py`** (`smart_radiation`): Адаптирован специально для веба — вместо тяжелых 3D-облаков точек он генерирует и шлет тепловую радиационную карту в виде сжатой картинки в топик `/radiation_image/compressed`.
+### Control Nodes (`smart_control` + `smart_plugins`)
 
-**Ключевые топики для подписки (UI <- ROS):**
-1. `/smart_telemetry` (`smart_interfaces/msg/SmartTelemetry`): Агрегированный поток данных (скорость `linear_speed`, радиация `dose_rate`, статусы `fsm_state`, `nav_status`).
-2. `/map` и `/local_costmap/costmap` (`nav_msgs/OccupancyGrid`): Поток карт для отрисовки препятствий навигации в 3D.
-3. `/radiation_image/compressed` (`sensor_msgs/msg/CompressedImage`): Радиационная обстановка в виде прозрачного теплового оверлея.
-4. `/waypoints_list` (`std_msgs/msg/String`): База данных маршрутов в формате JSON (от `waypoint_manager.py`).
-5. `/tf` (`tf2_msgs/msg/TFMessage`): Синхронизация позы робота на экране с реальностью.
+Launched via [`control_core.launch.py`](smart_control/launch/control_core.launch.py):
 
-**Ключевые топики для публикации (UI -> ROS):**
-1. `/smart_command` (`smart_interfaces/msg/SmartCommand`): Единая командная шина.
-   * `target_system` (nav, payload, system, operator)
-   * `command` (execute, save, go_to_named, save_map и т.д.)
-   * `payload_json` (координаты, параметры, команды)
-2. `/cmd_vel` и `/cmd_vel_shadow` (`geometry_msgs/msg/Twist`): Хард-реалтайм телеуправление базой и тенью (10Hz) напрямую через джойстик, минуя SmartCommand ради нулевой задержки.
-3. `/cmd_light` (`std_msgs/msg/Bool`): Управление освещением.
+* **`nav_coordinator` (C++, `smart_plugins`):** Native asynchronous `rclcpp_action::Client` interface to Nav2 (`NavigateToPose` and `NavigateThroughPoses`). Implements waypoint **Sliding Window** progression (up to 5 points), task queuing, multi-lap patrolling (`laps` up to 100), route snapshot saving for `cancel` / `resume`, and safety FSM enforcement (`rth` is permitted in any state).
+* **`mission_manager`:** Manages lifecycle of the navigation stack (`tmux` session `mission_nav_session` -> `bringup_lifelong.launch.py` / `bringup_mapping.launch.py`) and radiation subsystem (`tmux` session `radiation_session` -> `radiation_bringup.launch.py`). Also handles map saving (`/slam_toolbox/serialize_map` + `map_saver_cli`), costmap clearing, SLAM pause toggling, and `FollowPath.vx_max` updates via `set_speed:<m/s>`.
+* **`waypoint_manager`:** Stores named points and routes, publishes `/waypoints_list` (JSON) and `/smart_waypoints_markers` (`MarkerArray`), and expands `nav:go_to_named` into `go_to` or `waypoints`.
+* **`safety_watchdog`:** Monitors `/operator_heartbeat` and `/payload/status`. When `watchdog_on` is active and comms drop, transitions `/fsm_status`: `NORMAL` -> `WARNING` (5 s) -> `EVACUATING` (25 s, automatic `nav:rth` dispatch) -> `SAFE_HOLD` (unlocked via `operator:RESUME`).
+* **`tactical_executor`:** Executes relative motion commands (`move_relative`, `turn_relative`, `track_target`) with `/scan` obstacle checking and immediate preemption on `system:stop` / `nav:cancel` / `nav:rth`.
+* **`recovery_relocalizer`:** Grid scan matcher over `/scan` + SLAM Toolbox posegraph reload and `/initialpose` publication on `nav:recover_localization`.
+* **`telemetry_mux` (C++, `smart_plugins`):** Aggregates `/fsm_status`, `/nav_status`, `/odom`, `/radiation/dose`, `/cmd_light`, and `/payload/status` at `5 Hz` into `/smart_telemetry`.
+* **`payload_manager`:** Controls payload tools (`mock_sample` -> `lfcm_drill`), headlight relay (`/cmd_light`), and publishes `/payload/status`.
 
+### Navigation (`smart_nav`)
 
-# Архитектура шины `/smart_command`
+* Local controller: `nav2_mppi_controller::MPPIController` ([`nav2_params.yaml`](smart_nav/config/nav2_params.yaml)).
+* Global planner costmap combines `static_layer`, `obstacle_layer`, `inflation_layer`, and the custom `radiation_layer` (`smart_radiation_plugins::RadiationLayer`).
+* Two SLAM Toolbox operating modes:
+  * **Mapping:** [`bringup_mapping.launch.py`](smart_nav/launch/bringup_mapping.launch.py) (`slam_mapping.launch.py` + Nav2).
+  * **Lifelong Localization:** [`bringup_lifelong.launch.py`](smart_nav/launch/bringup_lifelong.launch.py) (`slam_lifelong.launch.py` + Nav2 using a preloaded `.posegraph` from [`smart_nav/maps`](smart_nav/maps)).
 
-Топик `/smart_command` (тип `smart_interfaces/msg/SmartCommand`) — это центральная нервная система вашего робота. Вместо десятков разрозненных топиков, все узлы общаются через единую шину, фильтруя сообщения по полю `target_system`.
+### Shadow Mode (`smart_server`)
 
-Формат сообщения:
-* `target_system` (строка): Имя подсистемы, к которой идет обращение.
-* `command` (строка): Сама команда (иногда составная, разделенная двоеточием).
-* `payload_json` (строка): JSON-объект с аргументами (координаты, массивы и т.д.).
-
-Ниже приведена таблица маршрутизации — кто слушает команды, и что они делают.
----
-
-1. Управление миссиями и системой (`target_system: 'system'`)
-**Слушатели:** `mission_manager.py`, `safety_watchdog.py`, `heartbeat_pub.py`
-
-| Команда (`command`) | Описание | Payload (JSON) | Кто обрабатывает |
-| :--- | :--- | :--- | :--- |
-| `start:<mode>:<map>` | Запуск ROS-слоя (например `start:lifelong:room60`) | - | `mission_manager` |
-| `stop` | Остановка навигации и SLAM (kill tmux) | - | `mission_manager` |
-| `restart` | Полный перезапуск миссии | - | `mission_manager` |
-| `save_map:<name>` | Дамп PoseGraph и 2D-карты в папку `maps/` | - | `mission_manager` |
-| `clear_costmaps` | Очистка локальной и глобальной карт препятствий | - | `mission_manager` |
-| `toggle_slam` | Пауза/Возобновление графа SLAM | - | `mission_manager` |
-| `rad_on` / `rad_off` | Включение/выключение влияния радиации на навигацию (и ALARA) | - | `mission_manager` |
-| `rad_record:<name>` | Начать/продолжить запись в радиационную карту `<name>.npy` | - | `mission_manager` |
-| `rad_load:<name>` | Загрузить радиационную карту `<name>.npy` в режиме 'только чтение' | - | `mission_manager` |
-| `rad_save` | Принудительно сохранить радиационную карту на диск | - | `mission_manager` |
-| `rad_clear` | Очистить радиационную карту в оперативной памяти (сброс) | - | `mission_manager` |
-| **`watchdog_on`** | **Включает генератор пульса и армирует охрану** | - | `heartbeat_pub` + `safety_watchdog` |
-| **`watchdog_off`**| **Выключает генератор пульса и сбрасывает охрану** | - | `heartbeat_pub` + `safety_watchdog` |
+`shadow_teleop_real` / `shadow_teleop_sim` (selected automatically by `server.launch.py` via `use_sim_time`) let the operator teleoperate a virtual "shadow" twin on the server (`/cmd_vel_shadow`) with costmap collision checking, record a validated waypoint trail, and dispatch it to `nav_coordinator` as a single `waypoints` command via `operator:execute`.
 
 ---
 
-2. Навигация и перемещение (`target_system: 'nav'`)
-**Слушатели:** `nav_coordinator.py`, `waypoint_manager.py` (как перехватчик `go_to_named`)
+## 6. ALARA Radiation Subsystem
 
-| Команда (`command`) | Описание | Payload (JSON) | Кто обрабатывает |
-| :--- | :--- | :--- | :--- |
-| `go_to` | Поездка в конкретную точку | `{"x": 1.0, "y": 2.0, "yaw": 0.5}` | `nav_coordinator` |
-| `waypoints` | Поездка по массиву точек (весь маршрут) | `{"points": [[x,y,yaw], ...]}` | `nav_coordinator` |
-| `add_to_route` | Добавить точку во временный буфер маршрута | `{"x": 1.0, "y": 2.0, "yaw": 0.5}` | `nav_coordinator` |
-| `start_route` | Запустить накопленный буфер маршрута | - | `nav_coordinator` |
-| `clear_route` | Очистить буфер маршрута | - | `nav_coordinator` |
-| `cancel` | Экстренная остановка движения | - | `nav_coordinator` |
-| `rth` | Return to Home (возврат на базу) | `{"x": 0.0, ...}` | `nav_coordinator` |
-| `go_to_named` | Поездка к сохраненной точке/маршруту | `{"name": "room60"}` | `waypoint_manager` (конвертирует в `go_to` или `waypoints`) |
+The radiation stack runs on demand (`system:rad_start` / `system:rad_on` in `mission_manager`, or manually via `ros2 launch smart_radiation radiation_bringup.launch.py`) so normal missions incur zero radiation overhead.
+
+1. **Field Mapping (`radiation_mapper_node`, C++):** Reads `/radiation/dose` and TF (`map` -> `base_footprint`), updates the 2D `.npy` dose and weight grids (with autosave and `/dev/shm/live_rad_map.npy` for live visualization). Controlled via `is_recording` and services `/radiation_mapper/save_map`, `/radiation_mapper/clear_map`.
+2. **Simulated Dosimeter (`virtual_geiger_node`, C++, node `/virtual_geiger`):** Emulates a Geiger counter over a ground-truth `.npy` map in simulation. Toggled independently (`rad_geiger_on` / `rad_geiger_off`) and automatically mutes if >1 publisher is active on `/radiation/dose` (e.g., when a physical sensor connects).
+3. **Physical Dosimeter (`accurad_serial_node`):** Reads Mirion AccuRad PRD telemetry over USB serial (`/dev/accurad`, configurable scaling/parameters) and publishes dose rate to `/radiation/dose`.
+4. **Field Server (`radiation_field_server`):** Applies sigmoid penalty mapping using dynamic parameters from [`radiation_params.yaml`](smart_radiation/config/radiation_params.yaml) (`d_noise`, `d_crit`, `k`) to output `/radiation_map` (`OccupancyGrid`) and `/radiation_image/compressed` for Web UI 2.0.
+5. **Nav2 Costmap Layer (`smart_radiation_plugins::RadiationLayer`):** Merges `/radiation_map` into the global costmap via `std::max()`, capped by `max_cost` (`220`) so hazardous zones are avoided when safe detours exist without becoming unrecoverable hard walls.
+6. **Speed Reflex (`alara_speed_reflex_node`, C++):** Dynamically publishes `/speed_limit`: limits travel speed in clean areas (`normal_speed_pct: 35%`) and boosts to `boost_speed_pct: 100%` above local dose threshold (`rad_threshold: 30%`) to minimize integrated exposure time.
+7. **Orchestration (`radiation_manager`):** Single handler for `rad_*` commands coordinating parameters and services across mapper, field server, and virtual geiger while publishing state on `/radiation/status`. When disabled (`is_active:=false`, `is_recording:=false`), worker nodes remain idle with minimal CPU usage.
 
 ---
 
-3. База данных маршрутов (`target_system: 'waypoints'`)
-**Слушатели:** `waypoint_manager.py`
+## 7. Manipulator Control (MoveIt 2 / Servo / 2.5D Manual)
 
-| Команда (`command`) | Описание | Payload (JSON) |
-| :--- | :--- | :--- |
-| `save` | Сохранить точку или маршрут в БД | `{"name": "...", "x":.., "y":.., "yaw":..}` или `{"name": "...", "points": [...]}` |
-| `delete` | Удалить запись из БД | `{"name": "..."}` |
+Control of the 6-DOF manipulator (`arm_joint_0..arm_joint_5`, gripper `arm_clamp`) is split between the onboard/sim layer and the operator station:
 
----
-
-4. Общение оператора и сервера (`target_system: 'operator'`)
-**Слушатели:** `twin_orchestrator.py` (на сервере), `safety_watchdog.py`
-
-| Команда (`command`) | Описание | Payload (JSON) | Кто обрабатывает |
-| :--- | :--- | :--- | :--- |
-| `execute` | Переброс записанного теневого маршрута навигаторам | - | `twin_orchestrator` (шлет в `shadow_command`) |
-| `RESUME` | Разблокировка робота после стабилизации сигнала | - | `safety_watchdog` (выходит из `SAFE_HOLD`) |
-
-5. Управление нагрузкой (`target_system: 'payload'`)
-**Слушатели:** `payload_manager.py`
-Здесь команды зависят от ваших манипуляторов и сенсоров (например, `deploy_sensor`, `retract_arm`).
-
-| Команда (`command`) | Описание | Payload (JSON) |
-| :--- | :--- | :--- |
-| `mock_sample` | Демонстрационный скрипт взятия пробы | - |
+* **Hardware / Sim Layer:**
+  * In simulation (`sim.launch.py` with `use_arm:=true`), spawns `arm_controller` and `joint_state_broadcaster`.
+  * On the real robot (`real_master.launch.py` with `use_arm:=true`), C++ node `trajectory_bridge` (`smart_plugins`) accepts both direct `trajectory_msgs/JointTrajectory` messages (`/arm_controller/joint_trajectory`) and MoveIt action goals (`arm_controller/follow_joint_trajectory`), translating them to `/arm/servo_cmd` for the ESP32.
+* **Server Manipulator Backend (On Demand via `twin_orchestrator`):**
+  * `system:arm_moveit_on` / `arm_moveit_off` -> [`arm_moveit.launch.py`](smart_server/launch/arm_moveit.launch.py) (`move_group`, `tactical_server`, `control_hub` in `arm_moveit_session`).
+  * `system:arm_servo_on` / `arm_servo_off` -> [`arm_servo.launch.py`](smart_server/launch/arm_servo.launch.py) (`moveit_servo` with `is_primary_planning_scene_monitor=true` + `teleop_manager` in `arm_servo_session`).
+  * `system:arm_off` -> stops both manipulator backends.
+* **Four Modes in Web UI 2.0 (`ArmControl.vue`):**
+  1. **JOINTS:** direct joint sliders `J0..J5` + clamp, `Fold`/`Unfold` presets, `LIVE FK` 3D trail, and trajectory sequencer to `/arm_controller/joint_trajectory`.
+  2. **MANUAL:** browser-side cylindrical **2.5D control** (zero server MoveIt nodes needed) — damped least-squares 2D Jacobian over radius $R$ and height $Z$ on $J1/J2$, automatic wrist leveling on $J4$, roll compensation on $J5$, and local FK.
+  3. **AUTO:** `Control Hub` missions, CSV sequence execution, and `GOTO_XYZ` planning (requires `MoveIt ON`).
+  4. **SERVO:** real-time Cartesian/angular streaming teleoperation via `MoveIt Servo` (requires `Servo ON`).
 
 ---
 
-6. Тактическое прямое управление (`target_system: 'tactical'`)
-**Слушатели:** `tactical_executor.py` (Работает на Роботе, страхуется локальным лидаром)
+## 8. Web UI 2.0 and 3D Digital Twin
 
-| Команда (`command`) | Описание | Payload (JSON) | Кто обрабатывает |
-| :--- | :--- | :--- | :--- |
-| `move_relative` | Проехать X метров вперед/назад | `{"direction": "forward", "distance": 1.0}` | `tactical_executor` |
-| `turn_relative` | Повернуться на X градусов | `{"degrees": 90.0}` | `tactical_executor` |
-| `track_target` | Visual Servoing (следование за объектом) | `{"offset": -0.2}` | `tactical_executor` |
+The frontend lives in [`Infrastructure_as_Code/web_ui_2.0`](Infrastructure_as_Code/web_ui_2.0/README.md) (see its local README for full technical details):
+
+* **HTTP Server (`smart_server/web_server.py`):** Multi-threaded `_ThreadingWebServer` (port `8080`, in-memory gzip & cache headers) serving `web_ui_2.0/dist` and workspace ROS assets at `/packages/<pkg>/`, `/install/`, and `/src/`.
+* **Map Transport:** [`map_to_image.py`](smart_server/smart_server/map_to_image.py) and `radiation_field_server.py` stream maps over `/map_image/compressed` and `/radiation_image/compressed` as PNGs with atomic geometry metadata packed in `header.frame_id` (`map|res|ox|oy|oz|qx|qy|qz|qw`).
+* **3D Engine (`Three.js` + `urdf-loader` + `SimpleTFClient`):**
+  * Client-side TF2 resolver without `ros3djs` or `tf2_web_republisher`.
+  * Renders robot URDF, 2D occupancy map, semi-transparent radiation layer, SDF environment STL meshes (`sdf_visualizer`), `/plan` paths, `/smart_waypoints_markers`, Shadow twin, and 3D end-effector trail.
+  * Drag-oriented **Nav Goal** (right-click / touch), **Center & Follow** camera mode, and an optional on-screen **Touch Joystick** for tablets/mobile browsers.
+
+---
+
+## 9. Unified Command Bus (`/smart_command`) and Telemetry (`/smart_telemetry`)
+
+Message definitions: `smart_interfaces/msg/SmartCommand` (`target_system`, `command`, `payload_json`) and `smart_interfaces/msg/SmartTelemetry`.
+
+### System, Missions, and Subsystems (`target_system: "system"`)
+
+| Command (`command`) | Description | Handler |
+|---|---|---|
+| `start:<mode>:<map>` / `stop` / `restart` | Start/stop/restart `bringup_<mode>.launch.py` (`lifelong` or `mapping`) | `mission_manager` |
+| `start_213`, `start_shelter_zero`, `start_shelter`, `start_kitchen`, `start_mapping`, `start_freeride` | Quick mission launch presets | `mission_manager` |
+| `save_map:<name>` | Save `.posegraph` + 2D grid map (and autosave active radiation map) | `mission_manager` |
+| `clear_costmaps` / `toggle_slam` | Clear local/global costmaps or pause SLAM Toolbox | `mission_manager` |
+| `set_speed:<m/s>` | Dynamically adjust Nav2 speed limit (`FollowPath.vx_max`) | `mission_manager` |
+| `watchdog_on` / `watchdog_off` | Enable/disable operator heartbeat & comms watchdog | `heartbeat_pub`, `safety_watchdog` |
+| `shadow_on` / `shadow_off` | Activate/deactivate Shadow Mode on the server | `mission_manager`, `twin_orchestrator` |
+| `rad_start`, `rad_on`, `rad_off` | Launch/enable/disable radiation subsystem and costmap layer | `mission_manager`, `radiation_manager` |
+| `rad_geiger_on` / `rad_geiger_off` | Enable/disable simulated `/virtual_geiger` publisher | `radiation_manager` |
+| `rad_load:<name>`, `rad_source:<name>` | Load `.npy` field map or virtual sensor ground-truth map | `radiation_manager` |
+| `rad_record:<name>`, `rad_save`, `rad_stop`, `rad_clear` | Start recording, save, stop recording, or clear radiation map | `radiation_manager` |
+| `arm_moveit_on` / `arm_moveit_off` | Start/stop `arm_moveit.launch.py` (MoveIt 2 + `control_hub`) | `twin_orchestrator` |
+| `arm_servo_on` / `arm_servo_off` / `arm_off` | Start/stop `arm_servo.launch.py` or shut down both arm backends | `twin_orchestrator` |
+
+### Navigation and Waypoints (`target_system: "nav"` / `"waypoints"` / `"radiation"`)
+
+| `target_system` | Command (`command`) | `payload_json` | Handler |
+|---|---|---|---|
+| `nav` | `go_to` / `go_to_with_bt` | `{"x": 1.0, "y": 2.0, "yaw": 0.5, "laps": 1, "name": "..."}` | `nav_coordinator` |
+| `nav` | `waypoints` / `patrol` / `follow_route` | `{"points": [[x,y,yaw], ...], "laps": 1, "name": "..."}` | `nav_coordinator` |
+| `nav` | `add_to_route` / `start_route` / `clear_route` | `{"x": .., "y": .., "yaw": ..}` (for `add_to_route`) | `nav_coordinator` |
+| `nav` | `cancel` / `resume` / `rth` | for `rth`: `{"x": 0.0, "y": 0.0, "yaw": 0.0}` | `nav_coordinator` |
+| `nav` | `go_to_named` | `{"name": "point_name", "laps": 1}` | `waypoint_manager` -> `nav_coordinator` |
+| `nav` | `recover_localization` | `{"map": "..."}` (optional) | `recovery_relocalizer` |
+| `waypoints` | `save` / `delete` | `{"name": "...", "tab": "...", "x":.., "y":.., "yaw":..}` or `"points": [...]` | `waypoint_manager` |
+| `radiation` | `rad_on`, `rad_off`, `rad_geiger_*`, `rad_load`, ... | — (colon-suffixed commands also accepted on `"radiation"`) | `radiation_manager` |
+
+### Operator, Payload, and Tactical (`"operator"` / `"payload"` / `"tactical"`)
+
+| `target_system` | Command (`command`) | `payload_json` | Handler |
+|---|---|---|---|
+| `operator` | `execute` / `clear` | — (dispatches/clears Shadow Twin route) | `twin_orchestrator` -> `shadow_teleop_*` |
+| `operator` | `RESUME` | — (exits `SAFE_HOLD` once comms recover) | `safety_watchdog` |
+| `payload` | `mock_sample` | — (simulated `lfcm_drill` sampling cycle) | `payload_manager` |
+| `tactical` | `move_relative` | `{"direction": "forward", "distance": 1.0}` | `tactical_executor` |
+| `tactical` | `turn_relative` | `{"degrees": 90.0}` | `tactical_executor` |
+| `tactical` | `track_target` | `{"offset": -0.2}` | `tactical_executor` |
+| `tactical` | `stop` / `cancel` / `abort` | — | `tactical_executor` |
+
+---
+
+## Additional Documentation
+
+* Frontend Technical Reference: [`Infrastructure_as_Code/web_ui_2.0/README.md`](Infrastructure_as_Code/web_ui_2.0/README.md)
+* Codebase Changelog: [`Infrastructure_as_Code/CHANGELOG.md`](Infrastructure_as_Code/CHANGELOG.md)
+* License: [`LICENSE`](LICENSE)

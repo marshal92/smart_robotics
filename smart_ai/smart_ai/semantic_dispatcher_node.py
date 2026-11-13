@@ -63,7 +63,7 @@ class SemanticDispatcherNode(Node):
         elif intent == 'complex':
             # Complex request with trigger word, forward to Strategist (LLM)
             self.get_logger().info("Trigger detected. Forwarding to LLM Strategist.")
-            self.publish_tts("Думаю над задачей.")
+            self.publish_tts("Thinking about the task.")
             
             req_msg = String()
             req_msg.data = payload['raw_text']
@@ -76,43 +76,43 @@ class SemanticDispatcherNode(Node):
     def execute_tactical_intent(self, intent, payload):
         if intent == 'stop':
             self.publish_smart_command('nav', 'cancel')
-            self.publish_tts("Останавливаюсь.")
+            self.publish_tts("Stopping.")
             
         elif intent == 'light_on':
             msg = Bool(); msg.data = True
             self.light_pub.publish(msg)
-            self.publish_tts("Свет включен.")
+            self.publish_tts("Light turned on.")
             
         elif intent == 'light_off':
             msg = Bool(); msg.data = False
             self.light_pub.publish(msg)
-            self.publish_tts("Свет выключен.")
+            self.publish_tts("Light turned off.")
             
         elif intent == 'go_to_named':
             target_name = payload['name']
             self.publish_smart_command('nav', 'go_to_named', {"name": target_name})
-            self.publish_tts(f"Еду в точку {target_name}.")
+            self.publish_tts(f"Going to {target_name}.")
             
         elif intent == 'save_waypoint':
             target_name = payload['name']
             self.publish_smart_command('waypoints', 'save', {"name": target_name})
-            self.publish_tts(f"Сохраняю точку {target_name}.")
+            self.publish_tts(f"Saving waypoint {target_name}.")
             
         elif intent == 'move_relative':
             dist = payload['value']
             direction = payload['direction']
             
             self.publish_smart_command('tactical', 'move_relative', {"direction": direction, "distance": dist})
-            self.publish_tts(f"Двигаюсь {'вперед' if direction == 'forward' else 'назад'} на {abs(dist)} метров.")
+            self.publish_tts(f"Moving {'forward' if direction == 'forward' else 'backward'} {abs(dist)} meters.")
             
         elif intent == 'turn_relative':
             degrees = payload['degrees']
             self.publish_smart_command('tactical', 'turn_relative', {"degrees": degrees})
-            self.publish_tts(f"Поворачиваю.")
+            self.publish_tts("Turning.")
             
         elif intent == 'find_object':
             target = payload['target']
-            self.publish_tts(f"Ищу {target}.")
+            self.publish_tts(f"Searching for {target}.")
             
             # 1. Ask vision system to start looking for the target
             req_msg = String()

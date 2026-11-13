@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Экспериментальный логгер для Раздела 4 (§4.2, Блок 4):
-3D-лидар и пространственная редукция на рельефе (сравнение вариантов обработки:
-со стабилизацией в base_stabilized vs без компенсации крена/тангажа в наклонённой системе корпуса).
+Experimental logger for Section 4 (§4.2, Block 4):
+3D LiDAR and spatial reduction over uneven terrain (comparing processing variants:
+stabilized into base_stabilized vs unstabilized body-frame scan without roll/pitch compensation).
 
-Согласно Chapter4_plan_v0773.md (§4.2, Блок 4):
-- Записывает временной ряд (10 Гц) в CSV: крен, тангаж, скорости, координаты, дальности /scan, статус.
-- Формирует расширенный JSON-паспорт эксперимента со всеми калибровочными параметрами:
-  высота установки лидара, диапазон среза основного препятствия, параметры низкопрофильного
-  фильтра микрорельефа/ступенек, маска корпуса робота, аппаратный снимок и интегральные метрики.
+Per Chapter4_plan_v0773.md (§4.2, Block 4):
+- Records 10 Hz time series to CSV: roll, pitch, velocities, coordinates, /scan ranges, status.
+- Generates an extended JSON experiment passport with all calibration parameters:
+  LiDAR mount height, main obstacle slice bounds, low-profile terrain/step filter settings,
+  robot chassis mask, hardware snapshot, and summary metrics.
 """
 
 import os
@@ -83,20 +83,20 @@ class Block4Logger(Node):
     def __init__(self):
         super().__init__('block4_logger')
 
-        self.declare_parameter('variant', 'stabilized')       # 'stabilized' или 'unstabilized'
+        self.declare_parameter('variant', 'stabilized')       # 'stabilized' or 'unstabilized'
         self.declare_parameter('target_frame', 'base_stabilized')
-        self.declare_parameter('lidar_mount_height', 0.30)    # Высота лидара над землёй (м)
-        self.declare_parameter('min_height', 0.30)            # Нижняя граница основного среза (м)
-        self.declare_parameter('max_height', 0.80)            # Верхняя граница основного среза (м)
-        self.declare_parameter('low_min_height', 0.10)        # Нижняя граница детектора ступенек (м)
-        self.declare_parameter('low_max_height', 0.30)        # Верхняя граница детектора ступенек (м)
-        self.declare_parameter('min_step_height', 0.09)       # Порог высоты ступеньки/бордюра (м)
-        self.declare_parameter('max_slope_deg', 38.0)         # Максимальный уклон преодоления рельефа (град)
-        self.declare_parameter('despeckle_min_cluster', 3)    # Минимальное число лучей в кластере для фильтра шума
-        self.declare_parameter('mask_length_x', 0.70)         # Длина маски шасси робота (м)
-        self.declare_parameter('mask_width_y', 0.56)          # Ширина маски шасси робота (м)
-        self.declare_parameter('rate_hz', 10.0)               # Частота логирования временного ряда
-        self.declare_parameter('world', 'shelter_zero.sdf')   # Текущий мир симуляции
+        self.declare_parameter('lidar_mount_height', 0.30)    # LiDAR height above ground (m)
+        self.declare_parameter('min_height', 0.30)            # Main slice lower bound (m)
+        self.declare_parameter('max_height', 0.80)            # Main slice upper bound (m)
+        self.declare_parameter('low_min_height', 0.10)        # Step detector lower bound (m)
+        self.declare_parameter('low_max_height', 0.30)        # Step detector upper bound (m)
+        self.declare_parameter('min_step_height', 0.09)       # Step/curb height threshold (m)
+        self.declare_parameter('max_slope_deg', 38.0)         # Max traversable terrain slope (deg)
+        self.declare_parameter('despeckle_min_cluster', 3)    # Min cluster beam count for noise filter
+        self.declare_parameter('mask_length_x', 0.70)         # Robot chassis mask length (m)
+        self.declare_parameter('mask_width_y', 0.56)          # Robot chassis mask width (m)
+        self.declare_parameter('rate_hz', 10.0)               # Time-series logging frequency
+        self.declare_parameter('world', 'shelter_zero.sdf')   # Active simulation world
         self.declare_parameter('notes', '')
         self.declare_parameter('log_dir', '/home/oleksandr/ros2_ws/src/smart_robotics/smart_sandbox/logs')
 
@@ -128,7 +128,7 @@ class Block4Logger(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # Показатели кинематики и ориентации
+        # Kinematics and orientation metrics
         self.odom_x = 0.0
         self.odom_y = 0.0
         self.odom_z = 0.0
@@ -139,7 +139,7 @@ class Block4Logger(Node):
         self.v_lin = 0.0
         self.v_ang = 0.0
 
-        # Параметры текущего LaserScan (/scan после stabilized_frame_publisher)
+        # Active LaserScan metrics (/scan emitted by stabilized_frame_publisher)
         self.scan_min_range = None
         self.scan_front_min_range = None
         self.scan_close_beams_lt_1_5m = 0
@@ -151,7 +151,7 @@ class Block4Logger(Node):
         self.prev_x = None
         self.prev_y = None
 
-        # Массивы и счётчики для расширенной статистики
+        # Buffers and counters for extended statistics
         self.hist_roll = []
         self.hist_pitch = []
         self.hist_tilt = []
@@ -160,10 +160,10 @@ class Block4Logger(Node):
         self.hist_close_beams = []
 
         self.ticks_active_move = 0
-        self.ticks_phantom_blocked = 0    # Близкое препятствие спереди (<1.2м) во время движения
-        self.ticks_hesitation_stuck = 0   # Статус движения есть, но скорость робота упала (<0.02 м/с)
+        self.ticks_phantom_blocked = 0    # Close obstacle ahead (<1.2 m) while moving
+        self.ticks_hesitation_stuck = 0   # Navigation active, but robot linear speed dropped (<0.02 m/s)
 
-        # Подписка на топики
+        # Topic subscriptions
         scan_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
@@ -211,7 +211,7 @@ class Block4Logger(Node):
 
         r, p, y = quat_to_rpy_deg(msg.pose.pose.orientation)
         self.yaw_deg = y
-        # Если в /odom есть реальный 3D-наклон (не плоская 2D-одометрия), обновляем
+        # Update only if /odom carries real 3D attitude (non-planar odometry)
         if abs(r) > 0.02 or abs(p) > 0.02:
             self.roll_deg = r
             self.pitch_deg = p
@@ -225,7 +225,7 @@ class Block4Logger(Node):
         self.prev_y = self.odom_y
 
     def _imu_cb(self, msg: Imu):
-        # IMU гарантированно несёт физический крен и тангаж корпуса танка
+        # IMU provides physical chassis roll and pitch of the tracked UGV
         r, p, _ = quat_to_rpy_deg(msg.orientation)
         self.roll_deg = r
         self.pitch_deg = p
@@ -243,7 +243,7 @@ class Block4Logger(Node):
                 valid.append(r)
                 if r < 1.5:
                     close_cnt += 1
-                # Сектор +-30 градусов спереди по курсу
+                # Forward +-30 deg sector along heading
                 if abs(angle) <= math.radians(30.0):
                     front_valid.append(r)
             angle += inc
@@ -290,7 +290,7 @@ class Block4Logger(Node):
         if self.scan_front_min_range is not None:
             self.hist_front_min.append(self.scan_front_min_range)
 
-        # Мониторинг мобильности и ложных препятствий
+        # Mobility and phantom-obstacle monitoring
         is_active_nav = any(k in self.nav_status.upper() for k in ('MOV', 'EXEC', 'ACTIVE', 'GOAL', 'RUN'))
         if is_active_nav or abs(self.v_lin) > 0.02:
             self.ticks_active_move += 1

@@ -8,11 +8,11 @@ from nav_msgs.msg import Path, OccupancyGrid
 from std_msgs.msg import String
 from visualization_msgs.msg import Marker
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
-# УДАЛИЛИ импорты ActionClient и NavigateThroughPoses
+# Removed ActionClient and NavigateThroughPoses imports
 import math, threading, time, json
 import numpy as np
 from ament_index_python.packages import get_package_share_directory
-from smart_interfaces.msg import SmartCommand # ИМПОРТ НОВОГО СООБЩЕНИЯ
+from smart_interfaces.msg import SmartCommand # Import unified command bus message
 
 class ShadowTeleopSimWorker(Node):
     def __init__(self, use_sim_time=True):
@@ -36,7 +36,7 @@ class ShadowTeleopSimWorker(Node):
         self.marker_pub  = self.create_publisher(Marker, '/shadow_marker', 10)
         self.path_pub    = self.create_publisher(Path,   '/shadow_path',   5)
         
-        # НОВЫЙ ПАБЛИШЕР: Отправляем готовый маршрут на робота
+        # Publisher: send the validated route to the robot
         self.smart_cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
 
         self.tf_buffer   = None
@@ -178,7 +178,7 @@ class ShadowTeleopSimWorker(Node):
             self._path_dirty = True
 
     def _send_nav_path(self):
-        """ Упаковываем маршрут в JSON и шлем в /smart_command """
+        """Pack route into JSON and publish to /smart_command."""
         if not self.recorded_poses:
             return
             
@@ -191,7 +191,7 @@ class ShadowTeleopSimWorker(Node):
 
         payload = {
             "points": points_list,
-            "bt": "" # Можно добавить логику деревьев поведения потом
+            "bt": "" # Reserved for custom Behavior Tree XML
         }
         
         msg = SmartCommand()

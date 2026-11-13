@@ -127,7 +127,7 @@
         <collision name="collision">
           <geometry>
             <mesh>
-              <uri>model://smart_sim2real/worlds/shelter.STL</uri>
+              <uri>package://smart_sim2real/worlds/shelter.STL</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>
@@ -135,7 +135,7 @@
         <visual name="visual">
           <geometry>
             <mesh>
-              <uri>model://smart_sim2real/worlds/shelter.STL</uri>
+              <uri>package://smart_sim2real/worlds/shelter.STL</uri>
               <scale>1 1 1</scale>
             </mesh>
           </geometry>

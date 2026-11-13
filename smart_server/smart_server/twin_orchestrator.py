@@ -19,7 +19,8 @@ class TwinOrchestrator(Node):
         self.worker_use_sim_time = self.get_parameter('worker_use_sim_time').value
 
         self._lock = threading.Lock()
-        self.arm_session_name = "arm_session"
+        self.arm_moveit_session = "arm_moveit_session"
+        self.arm_servo_session = "arm_servo_session"
 
         # Subscribe to the unified command bus
         self.sub = self.create_subscription(SmartCommand, '/smart_command', self.command_cb, 10)
@@ -33,63 +34,68 @@ class TwinOrchestrator(Node):
             "Waiting for /smart_command..."
         )
 
-    def _check_arm_session(self) -> bool:
+    def _is_session_active(self, session_name: str, expected_nodes: tuple) -> bool:
         try:
             active_nodes = self.get_node_names()
-            if 'control_hub' in active_nodes or 'tactical_server' in active_nodes:
+            if any(node in active_nodes for node in expected_nodes):
                 return True
         except Exception:
             pass
 
         r = subprocess.run(
-            ['tmux', 'has-session', '-t', self.arm_session_name],
+            ['tmux', 'has-session', '-t', session_name],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1.0
         )
         return r.returncode == 0
 
-    def _start_arm_backend(self, use_rviz: bool = False):
+    def _start_arm_session(self, session_name: str, launch_file: str, expected_nodes: tuple):
         with self._lock:
-            if self._check_arm_session():
-                self.get_logger().info("[Server] Arm backend is already running.")
+            if self._is_session_active(session_name, expected_nodes):
+                self.get_logger().info(f"[Server] Session '{session_name}' is already running.")
                 return
 
             sim_str = "true" if self.worker_use_sim_time else "false"
-            rviz_str = "true" if use_rviz else "false"
             cmd = (
                 f"source /opt/ros/jazzy/setup.bash && "
                 f"source ~/ros2_ws/install/setup.bash && "
-                f"ros2 launch smart_server arm_backend.launch.py "
-                f"use_sim_time:={sim_str} use_arm:=true use_rviz:={rviz_str}"
+                f"ros2 launch smart_server {launch_file} use_sim_time:={sim_str}"
             )
             subprocess.Popen(
-                ['tmux', 'new-session', '-d', '-s', self.arm_session_name, f"bash -c '{cmd}'"],
+                ['tmux', 'new-session', '-d', '-s', session_name, f"bash -c '{cmd}'"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL
             )
             self.get_logger().info(
-                f"[Server] Arm backend started in tmux session '{self.arm_session_name}' "
-                f"(use_sim_time={sim_str}, use_rviz={rviz_str})."
+                f"[Server] Started '{launch_file}' in tmux session '{session_name}' "
+                f"(use_sim_time={sim_str})."
             )
 
-    def _stop_arm_backend(self):
+    def _stop_arm_session(self, session_name: str):
         with self._lock:
-            r = subprocess.run(
-                ['tmux', 'has-session', '-t', self.arm_session_name],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1.0
-            )
-            if r.returncode != 0:
-                self.get_logger().info("[Server] Arm backend session is not running.")
-                return
+            self._kill_tmux_session(session_name)
 
-            subprocess.run(
-                ['tmux', 'send-keys', '-t', self.arm_session_name, 'C-c'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            time.sleep(1.0)
-            subprocess.run(
-                ['tmux', 'kill-session', '-t', self.arm_session_name],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-            self.get_logger().info(f"[Server] Arm backend session '{self.arm_session_name}' stopped.")
+    def _stop_all_arm_sessions(self):
+        with self._lock:
+            for name in (self.arm_moveit_session, self.arm_servo_session, "arm_session"):
+                self._kill_tmux_session(name)
+
+    def _kill_tmux_session(self, session_name: str):
+        r = subprocess.run(
+            ['tmux', 'has-session', '-t', session_name],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1.0
+        )
+        if r.returncode != 0:
+            return
+
+        subprocess.run(
+            ['tmux', 'send-keys', '-t', session_name, 'C-c'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        time.sleep(1.0)
+        subprocess.run(
+            ['tmux', 'kill-session', '-t', session_name],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        self.get_logger().info(f"[Server] Stopped tmux session '{session_name}'.")
 
     def _set_shadow_active(self, is_active: bool):
         if self.shadow_param_cli.wait_for_service(timeout_sec=1.0):
@@ -109,15 +115,38 @@ class TwinOrchestrator(Node):
             if cmd in ('shadow_on', 'shadow_off'):
                 self._set_shadow_active(cmd == 'shadow_on')
                 return
-            elif cmd == 'arm_on':
-                threading.Thread(target=self._start_arm_backend, args=(False,), daemon=True).start()
+            elif cmd == 'arm_moveit_on':
+                threading.Thread(
+                    target=self._start_arm_session,
+                    args=(self.arm_moveit_session, 'arm_moveit.launch.py', ('control_hub', 'tactical_server', 'move_group')),
+                    daemon=True,
+                ).start()
                 return
-            elif cmd == 'arm_on_rviz':
-                threading.Thread(target=self._start_arm_backend, args=(True,), daemon=True).start()
+            elif cmd == 'arm_moveit_off':
+                threading.Thread(
+                    target=self._stop_arm_session,
+                    args=(self.arm_moveit_session,),
+                    daemon=True,
+                ).start()
                 return
-            elif cmd in ('arm_off', 'stop'):
-                if cmd == 'arm_off':
-                    threading.Thread(target=self._stop_arm_backend, daemon=True).start()
+            elif cmd == 'arm_servo_on':
+                threading.Thread(
+                    target=self._start_arm_session,
+                    args=(self.arm_servo_session, 'arm_servo.launch.py', ('teleop_manager', 'servo_node')),
+                    daemon=True,
+                ).start()
+                return
+            elif cmd == 'arm_servo_off':
+                threading.Thread(
+                    target=self._stop_arm_session,
+                    args=(self.arm_servo_session,),
+                    daemon=True,
+                ).start()
+                return
+            elif cmd == 'arm_off':
+                threading.Thread(target=self._stop_all_arm_sessions, daemon=True).start()
+                return
+            elif cmd == 'stop':
                 return
 
         # Handle operator/shadow commands only

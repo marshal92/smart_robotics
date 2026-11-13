@@ -37,7 +37,7 @@
       <link name="environment_link">
         
          <collision name="zs_main_walls_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/zs_main_walls.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/zs_main_walls.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -48,12 +48,12 @@
           </surface>
         </collision>
         <visual name="zs_main_walls_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/zs_main_walls.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/zs_main_walls.stl</uri></mesh></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material>
         </visual>
         
         <collision name="zs_pip_forset_collision">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/zs_pip_forset.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/zs_pip_forset.stl</uri></mesh></geometry>
           <surface>
             <friction>
               <ode>
@@ -64,7 +64,7 @@
           </surface>
         </collision>
         <visual name="zs_pip_forset_visual">
-          <geometry><mesh><uri>file:///home/oleksandr/ros2_ws/src/smart_robotics/smart_sim2real/worlds/Gazebo_Meshes/zs_pip_forset.stl</uri></mesh></geometry>
+          <geometry><mesh><uri>package://smart_sim2real/worlds/Gazebo_Meshes/zs_pip_forset.stl</uri></mesh></geometry>
           <material><ambient>0.6 0.6 0.6 1</ambient><diffuse>0.6 0.6 0.6 1</diffuse></material>
         </visual>
       </link>

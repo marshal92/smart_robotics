@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Экспериментальный логгер для Раздела 4 (§4.2, Блок 2B):
-Сравнение режимов SLAM Toolbox (localization / lifelong vs continued mapping)
-при многократном прохождении замкнутого маршрута.
+Experimental logger for Section 4 (§4.2, Block 2B):
+Comparison of SLAM Toolbox modes (localization / lifelong vs continued mapping)
+across repeated traversals of a closed loop.
 
-Записывает в пакет smart_sandbox/logs/:
-1. <run_id>_timeseries.csv  (~300-600 КБ за 30 минут при 1-2 Гц)
-2. <run_id>_passport.json   (паспорт теста: режим SLAM, карта, параметры, железо + итоговая сводка)
+Writes to package smart_sandbox/logs/:
+1. <run_id>_timeseries.csv  (~300-600 KB over 30 min at 1-2 Hz)
+2. <run_id>_passport.json   (test passport: SLAM mode, map, params, hardware + summary)
 """
 
 import os
@@ -66,10 +66,10 @@ class Block2BLogger(Node):
     def __init__(self):
         super().__init__('block2b_logger')
 
-        # Параметры запуска
-        self.declare_parameter('mode_label', 'auto')     # 'localization', 'mapping' или 'auto'
+        # Launch parameters
+        self.declare_parameter('mode_label', 'auto')     # 'localization', 'mapping', or 'auto'
         self.declare_parameter('map_name', 'shelter_012.7')
-        self.declare_parameter('rate_hz', 1.0)           # 1 Гц = 1800 строк за 30 минут (~320 КБ)
+        self.declare_parameter('rate_hz', 1.0)           # 1 Hz = 1800 rows over 30 min (~320 KB)
         self.declare_parameter('notes', '')
         self.declare_parameter('log_dir', '/home/oleksandr/ros2_ws/src/smart_robotics/smart_sandbox/logs')
 
@@ -81,7 +81,7 @@ class Block2BLogger(Node):
 
         os.makedirs(self.log_dir, exist_ok=True)
 
-        # Автоопределение процесса SLAM и его режима
+        # Auto-detect active SLAM process and operating mode
         self.tracked_procs = {}
         self.detected_slam_exec = "unknown"
         self._refresh_processes(init_cpu=True)
@@ -100,7 +100,7 @@ class Block2BLogger(Node):
         self.csv_path = os.path.join(self.log_dir, f"{self.run_id}_timeseries.csv")
         self.passport_path = os.path.join(self.log_dir, f"{self.run_id}_passport.json")
 
-        # TF и топики
+        # TF and topics
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
@@ -113,12 +113,12 @@ class Block2BLogger(Node):
         self.nav_status = "UNKNOWN"
         self.fsm_status = "UNKNOWN"
 
-        # Метрики графа поз SLAM Toolbox (/slam_toolbox/graph_visualization)
+        # SLAM Toolbox pose-graph metrics (/slam_toolbox/graph_visualization)
         self.graph_nodes = 0
         self.graph_edges = 0
         self.graph_msg_count = 0
 
-        # Метрики карты (/map) — читаем только метаданные и число свободных/занятых ячеек при обновлении
+        # Map metrics (/map) — track metadata and free/occupied cell counts on update
         self.map_width = 0
         self.map_height = 0
         self.map_res = 0.05
@@ -126,7 +126,7 @@ class Block2BLogger(Node):
         self.map_occ_cells = 0
         self.map_updates_count = 0
 
-        # Накопление пути и статистики для паспорта
+        # Path accumulation and summary stats for passport
         self.start_wall_time = time.time()
         self.prev_map_x = None
         self.prev_map_y = None
@@ -144,14 +144,14 @@ class Block2BLogger(Node):
         self.graph_nodes_start = None
         self.graph_edges_start = None
 
-        # Подписки
+        # Subscriptions
         self.create_subscription(Odometry, '/odom', self._odom_cb, 10)
         self.create_subscription(String, '/nav_status', self._nav_status_cb, 10)
         self.create_subscription(String, '/fsm_status', self._fsm_status_cb, 10)
         self.create_subscription(MarkerArray, '/slam_toolbox/graph_visualization', self._graph_cb, 10)
         self.create_subscription(OccupancyGrid, '/map', self._map_cb, 1)
 
-        # Открываем CSV и пишем заголовок
+        # Open CSV and write header
         self.csv_file = open(self.csv_path, mode='w', newline='', encoding='utf-8')
         self.csv_fields = [
             'elapsed_s',
@@ -160,22 +160,22 @@ class Block2BLogger(Node):
             'mode_label',
             'nav_status',
             'fsm_status',
-            # Траектория в map (TF map -> base_footprint)
+            # Trajectory in map frame (TF map -> base_footprint)
             'map_x',
             'map_y',
             'map_yaw',
             'total_dist_m',
-            # Одометрия и скорости
+            # Odometry and velocities
             'odom_x',
             'odom_y',
             'odom_yaw',
             'v_lin',
             'v_ang',
-            # Поправка SLAM (TF map -> odom)
+            # SLAM drift correction (TF map -> odom)
             'map_odom_dx',
             'map_odom_dy',
             'map_odom_dyaw',
-            # Граф поз SLAM и размер карты
+            # SLAM pose graph and map dimensions
             'graph_nodes',
             'graph_edges',
             'map_width',
@@ -183,7 +183,7 @@ class Block2BLogger(Node):
             'map_free_cells',
             'map_occ_cells',
             'map_updates',
-            # Производительность узлов (CPU % одного ядра и память RSS МБ)
+            # Process performance (single-core CPU % and RSS memory MB)
             'slam_cpu_pct',
             'slam_rss_mb',
             'controller_cpu_pct',
@@ -201,7 +201,7 @@ class Block2BLogger(Node):
         self.csv_writer.writeheader()
         self.csv_file.flush()
 
-        # Сохраняем стартовый паспорт теста
+        # Write initial test passport
         self.passport_data = self._build_initial_passport()
         self._save_passport()
 
@@ -233,7 +233,7 @@ class Block2BLogger(Node):
         nodes = 0
         edges = 0
         for m in msg.markers:
-            # В slam_toolbox вершины графа публикуются как SPHERE / SPHERE_LIST, а рёбра как LINE_LIST
+            # slam_toolbox publishes graph vertices as SPHERE / SPHERE_LIST and edges as LINE_LIST
             if m.type == Marker.LINE_LIST:
                 edges += len(m.points) // 2
             elif m.type == Marker.SPHERE_LIST:
@@ -253,7 +253,7 @@ class Block2BLogger(Node):
         self.map_height = msg.info.height
         self.map_res = msg.info.resolution
         data = msg.data
-        # Быстрый подсчёт свободных (0) и занятых (>50) ячеек
+        # Fast count of free (0) and occupied (>50) cells
         self.map_free_cells = data.count(0)
         self.map_occ_cells = sum(1 for v in data if v > 50)
         self.map_updates_count += 1
@@ -269,7 +269,7 @@ class Block2BLogger(Node):
             return None, None, None
 
     def _refresh_processes(self, init_cpu=False):
-        """Находит процессы SLAM Toolbox и Nav2 по имени исполняемого файла."""
+        """Find SLAM Toolbox and Nav2 processes by executable name."""
         target_Map = {
             'slam_toolbox': ('async_slam_toolbox_node', 'localization_slam_toolbox_node', 'sync_slam_toolbox_node', 'lifelong_slam_toolbox_node'),
             'controller_server': ('controller_server',),
@@ -300,7 +300,7 @@ class Block2BLogger(Node):
                 continue
 
     def _sample_proc_metrics(self):
-        # Периодически проверяем, не перезапустились ли процессы
+        # Periodically check whether any tracked processes restarted
         if self.rows_written % 5 == 0:
             self._refresh_processes(init_cpu=False)
 
@@ -398,7 +398,7 @@ class Block2BLogger(Node):
         elapsed = now_wall - self.start_wall_time
         sim_time_s = self.get_clock().now().nanoseconds / 1e9
 
-        # Позиция робота в карте (map -> base_footprint / base_link)
+        # Robot pose in map (map -> base_footprint / base_link)
         map_x, map_y, map_yaw = self._lookup_tf_2d('map', 'base_footprint')
         if map_x is None:
             map_x, map_y, map_yaw = self._lookup_tf_2d('map', 'base_link')
@@ -406,16 +406,16 @@ class Block2BLogger(Node):
         if map_x is not None and map_y is not None:
             if self.prev_map_x is not None:
                 step_d = math.hypot(map_x - self.prev_map_x, map_y - self.prev_map_y)
-                # Отсекаем телепортации > 2.0 м за тик
+                # Filter out teleports > 2.0 m per tick
                 if step_d < 2.0:
                     self.total_distance_m += step_d
             self.prev_map_x = map_x
             self.prev_map_y = map_y
 
-        # Поправка SLAM (map -> odom)
+        # SLAM correction (map -> odom)
         mo_x, mo_y, mo_yaw = self._lookup_tf_2d('map', 'odom')
 
-        # Метрики CPU / RAM
+        # CPU / RAM metrics
         pm = self._sample_proc_metrics()
         sys_cpu = psutil.cpu_percent(interval=None)
         sys_ram_mb = psutil.virtual_memory().used / (1024.0 * 1024.0)
@@ -476,7 +476,7 @@ class Block2BLogger(Node):
         self.csv_writer.writerow(row)
         self.rows_written += 1
 
-        # Сбрасываем буфер на диск каждые 10 строк и обновляем паспорт каждые 30 строк
+        # Flush buffer to disk every 10 rows and update passport summary every 30 rows
         if self.rows_written % 10 == 0:
             self.csv_file.flush()
             self.get_logger().info(
