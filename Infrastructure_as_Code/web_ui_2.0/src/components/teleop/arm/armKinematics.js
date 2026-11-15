@@ -18,6 +18,13 @@ export const ARM_L2 = 0.216
 export const ARM_WRIST_DY = 0.028
 export const ARM_SHOULDER_Z = 0.09
 export const BOOM_DLS_LAMBDA = 0.015
+export const CLAMP_MIN_RAD = -0.5
+export const CLAMP_MAX_RAD = 0.5
+
+export function clampGripperRad(valueRad) {
+  if (!Number.isFinite(valueRad)) return 0
+  return Math.min(CLAMP_MAX_RAD, Math.max(CLAMP_MIN_RAD, valueRad))
+}
 
 export function clampJointRad(index, valueRad) {
   const lim = ARM_JOINT_LIMITS_RAD[index]

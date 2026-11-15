@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { STLLoader } from 'three/addons/loaders/STLLoader.js'
 import { ArmTrailManager } from './armTrail'
 import { useRosStore } from '../stores/rosStore'
+import { subscribeJointStates } from '../services/rosConnection'
 
 export function createURDFRobot(ros, viewer, tfClient) {
   const store = useRosStore()
@@ -21,13 +22,16 @@ export function createURDFRobot(ros, viewer, tfClient) {
 
   const unsubscribeStore = store.$subscribe((mutation, state) => {
     if (!armTrail || isDisposed) return
+    let changed = false
     if (state.armTrailEnabled !== lastTrailEnabled) {
       lastTrailEnabled = state.armTrailEnabled
       armTrail.setEnabled(state.armTrailEnabled)
+      changed = true
     }
     if (state.armTrailClearTrigger !== lastClearTrigger) {
       lastClearTrigger = state.armTrailClearTrigger
       armTrail.clear()
+      changed = true
     }
     if (state.plannedArmPath !== lastPlannedPath) {
       lastPlannedPath = state.plannedArmPath
@@ -36,6 +40,10 @@ export function createURDFRobot(ros, viewer, tfClient) {
       } else {
         armTrail.clearPlannedPath()
       }
+      changed = true
+    }
+    if (changed) {
+      viewer.requestRender?.()
     }
   })
 
@@ -51,7 +59,7 @@ export function createURDFRobot(ros, viewer, tfClient) {
   }
 
   let urdfRobot = null
-  let jointSub = null
+  let unsubJointStates = null
 
   paramClient.callService(request, (result) => {
     if (isDisposed) return
@@ -60,26 +68,29 @@ export function createURDFRobot(ros, viewer, tfClient) {
       const urdfLoader = new URDFLoader(new THREE.LoadingManager())
       urdfLoader.packages = `http://${window.location.hostname}:8080/packages`
       
-      const lightBlueMaterial = new THREE.MeshPhysicalMaterial({
+      const lightBlueMaterial = new THREE.MeshStandardMaterial({
         color: 0x2196f3,          // Lighter blue for manipulator & primitives
         emissive: 0x051020,
         roughness: 0.5,
         metalness: 0.3,
-        clearcoat: 0.2,
-        clearcoatRoughness: 0.4,
-        reflectivity: 0.7,
         depthWrite: true,
         depthTest: true
       })
       
-      const darkBlueMaterial = new THREE.MeshPhysicalMaterial({
+      const darkBlueMaterial = new THREE.MeshStandardMaterial({
         color: 0x1565c0,          // Darker blue for UGV chassis
         emissive: 0x051020,
         roughness: 0.5,
         metalness: 0.4,
-        clearcoat: 0.2,
-        clearcoatRoughness: 0.4,
-        reflectivity: 0.7,
+        depthWrite: true,
+        depthTest: true
+      })
+
+      const blackTracksMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1c1f24,          // Matte dark charcoal rubber for UGV tracks
+        emissive: 0x050507,
+        roughness: 0.78,
+        metalness: 0.15,
         depthWrite: true,
         depthTest: true
       })
@@ -105,12 +116,15 @@ export function createURDFRobot(ros, viewer, tfClient) {
               }
               geometry.computeVertexNormals()
               
-              // Chassis (base.STL) uses dark blue so the lighter-blue manipulator stands out
+              // Chassis (base.STL) uses dark blue, tracks (tracks.STL) use dark rubber, manipulator uses light blue
               const lowerUrl = cleanUrl.toLowerCase()
+              const isTracks = lowerUrl.endsWith('/tracks.stl') || lowerUrl === 'tracks.stl'
               const isChassis = lowerUrl.endsWith('/base.stl') || lowerUrl === 'base.stl'
               const isLidar = lowerUrl.includes('lidar') || lowerUrl.includes('laser') || lowerUrl.includes('velodyne')
               
-              const selectedMaterial = isChassis ? darkBlueMaterial : lightBlueMaterial
+              const selectedMaterial = isTracks
+                ? blackTracksMaterial
+                : (isChassis ? darkBlueMaterial : lightBlueMaterial)
               const mesh = new THREE.Mesh(geometry, selectedMaterial)
               mesh.userData.keepMaterial = true
               
@@ -121,6 +135,9 @@ export function createURDFRobot(ros, viewer, tfClient) {
               mesh.castShadow = true
               mesh.receiveShadow = true
               done(mesh)
+              if (!isDisposed) {
+                viewer.requestRender?.()
+              }
             },
             undefined,
             (err) => done(null, err)
@@ -171,32 +188,42 @@ export function createURDFRobot(ros, viewer, tfClient) {
       if (store.plannedArmPath && armTrail) {
         armTrail.setPlannedPath(store.plannedArmPath, armBaseLink)
       }
+      viewer.requestRender?.()
 
-      // Subscribe to joint states to update the arm with throttle to prevent freezing
-      jointSub = new ROSLIB.Topic({
-        ros: ros,
-        name: '/joint_states',
-        messageType: 'sensor_msgs/msg/JointState'
-      })
-
+      // Share single /joint_states subscription via rosConnection bus to avoid duplicate ROSLIB topics
       let lastRenderUpdate = 0
-      jointSub.subscribe((msg) => {
-        if (!urdfRobot) return
+      const lastJointValues = Object.create(null)
+      let hasAppliedInitialJoints = false
+      const JOINT_RENDER_EPS = 1e-4
+      unsubJointStates = subscribeJointStates(ros, (msg) => {
+        if (!urdfRobot || isDisposed) return
         const now = performance.now()
         if (now - lastRenderUpdate < 33) return // ~30Hz max
         lastRenderUpdate = now
-        
-        for (let i = 0; i < msg.name.length; i++) {
-          const jointName = msg.name[i]
-          const jointAngle = msg.position[i]
-          if (urdfRobot.joints[jointName]) {
-            urdfRobot.setJointValue(jointName, jointAngle)
+
+        let changed = !hasAppliedInitialJoints
+        const names = msg.name || []
+        const positions = msg.position || []
+        for (let i = 0; i < names.length; i++) {
+          const jointName = names[i]
+          const jointAngle = positions[i]
+          if (urdfRobot.joints[jointName] && Number.isFinite(jointAngle)) {
+            const prevAngle = lastJointValues[jointName]
+            if (prevAngle === undefined || Math.abs(jointAngle - prevAngle) > JOINT_RENDER_EPS) {
+              lastJointValues[jointName] = jointAngle
+              urdfRobot.setJointValue(jointName, jointAngle)
+              changed = true
+            }
           }
         }
 
-        // Live TCP trail update
-        if (armTrail && toolLink) {
-          armTrail.update(toolLink, armBaseLink)
+        if (changed) {
+          hasAppliedInitialJoints = true
+          // Live TCP trail update
+          if (armTrail && toolLink) {
+            armTrail.update(toolLink, armBaseLink)
+          }
+          viewer.requestRender?.()
         }
       })
       // Dynamically find the root link of the URDF
@@ -212,13 +239,30 @@ export function createURDFRobot(ros, viewer, tfClient) {
       }
 
       // Link the root of the URDF to its ACTUAL TF frame
+      let lastRootPose = null
+      const ROOT_POS_EPS = 1e-5
+      const ROOT_ROT_EPS = 1e-5
       tfClient.subscribe(rootLink, (tf) => {
         if (isDisposed || !urdfRobot) return
-        urdfRobot.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
-        urdfRobot.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
+        const t = tf.translation
+        const r = tf.rotation
+        if (lastRootPose &&
+            Math.abs(t.x - lastRootPose.px) <= ROOT_POS_EPS &&
+            Math.abs(t.y - lastRootPose.py) <= ROOT_POS_EPS &&
+            Math.abs(t.z - lastRootPose.pz) <= ROOT_POS_EPS &&
+            Math.abs(r.x - lastRootPose.rx) <= ROOT_ROT_EPS &&
+            Math.abs(r.y - lastRootPose.ry) <= ROOT_ROT_EPS &&
+            Math.abs(r.z - lastRootPose.rz) <= ROOT_ROT_EPS &&
+            Math.abs(r.w - lastRootPose.rw) <= ROOT_ROT_EPS) {
+          return
+        }
+        lastRootPose = { px: t.x, py: t.y, pz: t.z, rx: r.x, ry: r.y, rz: r.z, rw: r.w }
+        urdfRobot.position.set(t.x, t.y, t.z)
+        urdfRobot.quaternion.set(r.x, r.y, r.z, r.w)
         if (armTrail && toolLink) {
           armTrail.update(toolLink, armBaseLink)
         }
+        viewer.requestRender?.()
       })
 
     } else {
@@ -231,7 +275,10 @@ export function createURDFRobot(ros, viewer, tfClient) {
       isDisposed = true
       if (unsubscribeStore) unsubscribeStore()
       if (armTrail) armTrail.dispose()
-      if (jointSub) jointSub.unsubscribe()
+      if (unsubJointStates) {
+        unsubJointStates()
+        unsubJointStates = null
+      }
       // tfClient base_footprint unsubscription is handled globally in DigitalTwin3D.vue on disconnect
       
       if (toolAxesHelper) {
@@ -265,6 +312,7 @@ export function createURDFRobot(ros, viewer, tfClient) {
             }
           }
         })
+        viewer.requestRender?.()
       }
     }
   }

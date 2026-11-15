@@ -1,8 +1,8 @@
 import { inject, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import * as ROSLIB from 'roslib'
-import { getRosInstance, pubSmartCommand } from '../../../services/rosConnection'
+import { getRosInstance, pubSmartCommand, subscribeJointStates } from '../../../services/rosConnection'
 import { useRosStore } from '../../../stores/rosStore'
-import { clampJointRad, computeArmToolFrame } from './armKinematics'
+import { clampGripperRad, clampJointRad, computeArmToolFrame } from './armKinematics'
 
 export const ARM_ROS_SYMBOL = Symbol('armRosContext')
 
@@ -47,6 +47,7 @@ export function provideArmRosContext() {
 
   // Live feedback state shared across all arm tabs
   const currentJointAnglesRad = ref([0, 0, 0, 0, 0, 0])
+  const currentClampRad = ref(0.0)
   const hasToolPoseData = ref(false)
   const telemetrySource = ref('waiting') // 'waiting' | 'fk' | 'tf'
   const toolPose = ref({
@@ -82,7 +83,7 @@ export function provideArmRosContext() {
   }
 
   let hubResetTimer = null
-  let jointSub = null
+  let unsubJointStates = null
   let trajPub = null
   let cmdVelPub = null
   let unfoldPub = null
@@ -104,44 +105,50 @@ export function provideArmRosContext() {
     const ros = getRosInstance()
     if (!ros) return
 
-    if (!jointSub) {
-      jointSub = new ROSLIB.Topic({
-        ros,
-        name: '/joint_states',
-        messageType: 'sensor_msgs/JointState'
-      })
+    if (!unsubJointStates) {
       let lastJointUpdate = 0
-      jointSub.subscribe((msg) => {
+      let lastFkTelemetryAt = 0
+      let hasJointTelemetry = false
+      const JOINT_EPS = 1e-4
+      unsubJointStates = subscribeJointStates(ros, (msg) => {
         const now = performance.now()
         if (now - lastJointUpdate < 33) return // ~30Hz max
         lastJointUpdate = now
 
         const names = msg.name || []
         const positions = msg.position || []
-        let updated = false
-        const newAngles = [...currentJointAnglesRad.value]
+        const prevAngles = currentJointAnglesRad.value
+        let newAngles = null
+        let changed = false
         for (let i = 0; i < 6; i++) {
           const idx = names.indexOf(`arm_joint_${i}`)
           if (idx !== -1 && idx < positions.length) {
-            newAngles[i] = positions[idx]
-            updated = true
+            const val = positions[idx]
+            if (Number.isFinite(val) && (!hasJointTelemetry || Math.abs(val - prevAngles[i]) > JOINT_EPS)) {
+              if (!newAngles) newAngles = [...prevAngles]
+              newAngles[i] = val
+              changed = true
+            }
           }
         }
-        if (updated) {
+        if (changed && newAngles) {
+          hasJointTelemetry = true
           currentJointAnglesRad.value = newAngles
-          // Local FK fallback keeps TOOL POSE TELEMETRY live even when Servo/teleop_manager is off
-          if (now - lastTfTelemetryAt > 600) {
-            const fk = computeArmToolFrame(newAngles)
-            hasToolPoseData.value = true
-            telemetrySource.value = 'fk'
-            toolPose.value = {
-              x: fk.position[0] * 1000.0,
-              y: fk.position[1] * 1000.0,
-              z: fk.position[2] * 1000.0,
-              roll: fk.rollDeg,
-              pitch: fk.pitchDeg,
-              yaw: fk.yawDeg
-            }
+        }
+        // Local FK fallback keeps TOOL POSE TELEMETRY live even when Servo/teleop_manager is off (throttled to ~10Hz)
+        if (now - lastTfTelemetryAt > 600 && (!hasToolPoseData.value || (changed && now - lastFkTelemetryAt >= 100))) {
+          lastFkTelemetryAt = now
+          const anglesForFk = newAngles || prevAngles
+          const fk = computeArmToolFrame(anglesForFk)
+          hasToolPoseData.value = true
+          telemetrySource.value = 'fk'
+          toolPose.value = {
+            x: fk.position[0] * 1000.0,
+            y: fk.position[1] * 1000.0,
+            z: fk.position[2] * 1000.0,
+            roll: fk.rollDeg,
+            pitch: fk.pitchDeg,
+            yaw: fk.yawDeg
           }
         }
       })
@@ -259,17 +266,29 @@ export function provideArmRosContext() {
       toolPoseSub.subscribe((msg) => {
         if (!msg.pose) return
         lastTfTelemetryAt = performance.now()
-        hasToolPoseData.value = true
-        telemetrySource.value = 'tf'
         const pos = msg.pose.position
         const [r, p, y] = eulerFromQuaternion(msg.pose.orientation)
-        toolPose.value = {
+        const nextPose = {
           x: pos.x * 1000.0,
           y: pos.y * 1000.0,
           z: pos.z * 1000.0,
           roll: (r * 180.0) / Math.PI,
           pitch: (p * 180.0) / Math.PI,
           yaw: (y * 180.0) / Math.PI
+        }
+        const prev = toolPose.value
+        const changed = !hasToolPoseData.value ||
+          telemetrySource.value !== 'tf' ||
+          Math.abs(nextPose.x - prev.x) > 0.05 ||
+          Math.abs(nextPose.y - prev.y) > 0.05 ||
+          Math.abs(nextPose.z - prev.z) > 0.05 ||
+          Math.abs(nextPose.roll - prev.roll) > 0.05 ||
+          Math.abs(nextPose.pitch - prev.pitch) > 0.05 ||
+          Math.abs(nextPose.yaw - prev.yaw) > 0.05
+        if (changed) {
+          hasToolPoseData.value = true
+          telemetrySource.value = 'tf'
+          toolPose.value = nextPose
         }
       })
     }
@@ -284,9 +303,9 @@ export function provideArmRosContext() {
       clearTimeout(hubResetTimer)
       hubResetTimer = null
     }
-    if (jointSub) {
-      jointSub.unsubscribe()
-      jointSub = null
+    if (unsubJointStates) {
+      unsubJointStates()
+      unsubJointStates = null
     }
     if (hubStatusSub) {
       hubStatusSub.unsubscribe()
@@ -318,6 +337,32 @@ export function provideArmRosContext() {
       joint_names: ARM_JOINT_NAMES,
       points: [{
         positions: targetRad,
+        velocities: [],
+        accelerations: [],
+        effort: [],
+        time_from_start: { sec, nanosec }
+      }]
+    })
+  }
+
+  const publishClampRad = (clampRad, durationSec = 0.08) => {
+    const targetRad = clampGripperRad(Number(clampRad) || 0.0)
+    currentClampRad.value = targetRad
+    if (!trajPub) return
+
+    const rawDuration = Number(durationSec)
+    const d = Number.isFinite(rawDuration) && rawDuration >= 0.05 ? rawDuration : 0.08
+    let sec = Math.floor(d)
+    let nanosec = Math.round((d - sec) * 1000000000)
+    if (nanosec >= 1000000000) {
+      sec += 1
+      nanosec -= 1000000000
+    }
+    trajPub.publish({
+      header: { stamp: { sec: 0, nanosec: 0 }, frame_id: '' },
+      joint_names: ['arm_clamp'],
+      points: [{
+        positions: [targetRad],
         velocities: [],
         accelerations: [],
         effort: [],
@@ -456,6 +501,7 @@ export function provideArmRosContext() {
     store,
     pubSmartCommand,
     currentJointAnglesRad,
+    currentClampRad,
     hasToolPoseData,
     telemetrySource,
     toolPose,
@@ -469,6 +515,7 @@ export function provideArmRosContext() {
     gotoStatusType,
     addHubLog,
     publishJointPositionsRad,
+    publishClampRad,
     publishJointPositionsDeg,
     sendTwist,
     publishMode,

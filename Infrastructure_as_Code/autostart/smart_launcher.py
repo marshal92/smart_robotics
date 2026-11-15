@@ -14,10 +14,18 @@ if os.path.exists(_local_lib) and _local_lib not in os.environ.get("LD_LIBRARY_P
         pass
 
 import json
+import shlex
 import socket
 import subprocess
 import threading
 import time
+
+DEFAULT_CYCLONEDDS_URI = (
+    "<CycloneDDS><Domain><Discovery>"
+    "<ParticipantIndex>auto</ParticipantIndex>"
+    "<MaxAutoParticipantIndex>500</MaxAutoParticipantIndex>"
+    "</Discovery></Domain></CycloneDDS>"
+)
 
 # Load the exact same environment as an interactive terminal (~/.bashrc:
 # ROS setup, RMW_IMPLEMENTATION, CYCLONEDDS_URI, etc.). Needed when started
@@ -458,6 +466,12 @@ class SmartControlApp(QMainWindow):
         )
 
         def runner():
+            cyclone_uri = os.environ.get("CYCLONEDDS_URI", "").strip()
+            if not cyclone_uri:
+                home_xml = os.path.expanduser("~/cyclonedds.xml")
+                cyclone_uri = f"file://{home_xml}" if os.path.isfile(home_xml) else DEFAULT_CYCLONEDDS_URI
+            export_line = f"export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI={shlex.quote(cyclone_uri)}"
+
             # Clean up any leftover simulation session and launch a fresh tmux session
             tmux_sim = (
                 "tmux kill-session -t sim_session 2>/dev/null; "
@@ -468,8 +482,8 @@ class SmartControlApp(QMainWindow):
                 "tmux kill-session -t radiation_session 2>/dev/null; "
                 "tmux new-session -d -s sim_session; "
                 "tmux send-keys -t sim_session 'source /opt/ros/jazzy/setup.bash && source ~/ros2_ws/install/setup.bash' C-m; "
-                "tmux send-keys -t sim_session 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' C-m; "
-                f"tmux send-keys -t sim_session '{launch_cmd}' C-m"
+                f"tmux send-keys -t sim_session {shlex.quote(export_line)} C-m; "
+                f"tmux send-keys -t sim_session {shlex.quote(launch_cmd)} C-m"
             )
             subprocess.run(tmux_sim, shell=True)
             self.signals.status_update.emit("Waiting for Web UI server initialization...")

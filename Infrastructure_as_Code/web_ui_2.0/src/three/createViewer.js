@@ -62,14 +62,28 @@ export function createViewer(container, options = {}) {
 
 
   let animationId = null
+  let renderRequested = false
+  let isDisposed = false
 
-  const renderLoop = () => {
-    animationId = requestAnimationFrame(renderLoop)
-    controls.update()
+  const renderNow = () => {
+    animationId = null
+    if (isDisposed || !renderRequested) return
+    renderRequested = false
+    const moved = controls.update()
     renderer.render(scene, camera)
+    if (controls.enableDamping && moved) {
+      requestRender()
+    }
   }
-  
-  renderLoop()
+
+  const requestRender = () => {
+    if (isDisposed || renderRequested) return
+    renderRequested = true
+    animationId = requestAnimationFrame(renderNow)
+  }
+
+  controls.addEventListener('change', requestRender)
+  requestRender()
 
   const resize = () => {
     if (!container) return
@@ -79,6 +93,7 @@ export function createViewer(container, options = {}) {
     camera.aspect = width / height
     camera.updateProjectionMatrix()
     renderer.setSize(width, height)
+    requestRender()
   }
 
   const resizeObserver = new ResizeObserver(() => {
@@ -87,9 +102,13 @@ export function createViewer(container, options = {}) {
   resizeObserver.observe(container)
 
   const dispose = () => {
+    isDisposed = true
+    renderRequested = false
     if (animationId !== null) {
       cancelAnimationFrame(animationId)
+      animationId = null
     }
+    controls.removeEventListener('change', requestRender)
     resizeObserver.disconnect()
     controls.dispose()
     renderer.dispose()
@@ -100,6 +119,7 @@ export function createViewer(container, options = {}) {
 
   const setBackground = (color) => {
     renderer.setClearColor(color, 1)
+    requestRender()
   }
 
   return {
@@ -109,6 +129,7 @@ export function createViewer(container, options = {}) {
     controls,
     resize,
     setBackground,
+    requestRender,
     dispose
   }
 }

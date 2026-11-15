@@ -204,6 +204,7 @@ import { useWaypoints } from './composables/useWaypoints'
 import { useNavSpeed } from './composables/useNavSpeed'
 import CameraStream from '../teleop/CameraStream.vue'
 import TouchJoystick from '../teleop/TouchJoystick.vue'
+import { registerCameraGamepadHandlers } from '../../services/gamepadService'
 
 const store = useRosStore()
 const viewerInitialized = ref(false)
@@ -247,6 +248,7 @@ const centerCameraOnRobot = () => {
   viewer.camera.position.copy(targetPos).add(offset)
   viewer.controls.update()
   lastFollowedTarget = targetPos.clone()
+  viewer.requestRender?.()
 }
 
 const toggleFollowAndCenter = () => {
@@ -257,6 +259,38 @@ const toggleFollowAndCenter = () => {
     lastFollowedTarget = null
   }
 }
+
+const CAM_ORBIT_YAW_SPEED = 2.2
+const CAM_ORBIT_PITCH_SPEED = 1.4
+const CAM_MIN_POLAR = 0.14
+const CAM_MAX_POLAR = 1.5
+
+const orbitCameraByGamepad = (rightX, rightY, dtSec) => {
+  if (!viewer || !viewer.controls || !viewer.camera || !viewer.controls.enabled) return
+  const offset = viewer.camera.position.clone().sub(viewer.controls.target)
+  const r = offset.length()
+  if (r < 0.05) return
+
+  // Z-up spherical angles: stick right (+X) turns view right (-azim); stick up (-Y) looks higher (+polar)
+  const horiz = Math.hypot(offset.x, offset.y)
+  const azim = Math.atan2(offset.y, offset.x) - rightX * CAM_ORBIT_YAW_SPEED * dtSec
+  const polar = Math.min(
+    CAM_MAX_POLAR,
+    Math.max(CAM_MIN_POLAR, Math.atan2(horiz, offset.z) - rightY * CAM_ORBIT_PITCH_SPEED * dtSec)
+  )
+
+  const sinP = Math.sin(polar)
+  offset.set(
+    r * sinP * Math.cos(azim),
+    r * sinP * Math.sin(azim),
+    r * Math.cos(polar)
+  )
+  viewer.camera.position.copy(viewer.controls.target).add(offset)
+  viewer.controls.update()
+  viewer.requestRender?.()
+}
+
+let unregisterCameraGamepad = null
 
 const goTo = (name) => {
   pubSmartCommand('nav', 'go_to_named', { name })
@@ -344,11 +378,16 @@ function toggleShadow() {
   showShadowRobot.value = !showShadowRobot.value
   if (viewer && viewer.shadowGroup) {
     viewer.shadowGroup.visible = showShadowRobot.value
+    viewer.requestRender?.()
   }
 }
 
 onMounted(() => {
   createScene()
+  unregisterCameraGamepad = registerCameraGamepadHandlers({
+    onOrbit: orbitCameraByGamepad,
+    onToggleFollow: toggleFollowAndCenter
+  })
   if (store.isConnected) {
     connectSceneData()
   }
@@ -452,6 +491,7 @@ function disconnectSceneData() {
   hoverCoords.value = null
   robotCoords.value = null
   viewerInitialized.value = false
+  viewer?.requestRender?.()
 }
 
 function createScene() {
@@ -485,37 +525,43 @@ function createScene() {
   viewer.scene.add(shadowGroup)
   viewer.shadowGroup = shadowGroup // Store in viewer to access in loader
   
-  const loader = new STLLoader()
-  const meshUrl = 'http://' + window.location.hostname + ':8080/install/ugv_tracked_description/share/ugv_tracked_description/meshes/base.STL'
-  
-  loader.load(meshUrl, (geometry) => {
-    if (!viewer || !viewer.shadowGroup) {
-      geometry.dispose()
-      return
-    }
-    // Fix missing normals from raw STL
-    geometry.computeVertexNormals()
-    
-    // Removed manual robotMesh because urdfRobot now successfully loads the chassis via intercepted file:// paths!
-    
-    // === SHADOW ROBOT MESH ===
-    const shadowMaterial = new THREE.MeshStandardMaterial({
-      color: 0x00ffff,
-      roughness: 0.8,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.5,
-      depthWrite: false
-    })
-    const shadowMesh = new THREE.Mesh(geometry, shadowMaterial)
-    shadowMesh.scale.set(0.001, 0.001, 0.001)
-    shadowMesh.rotation.set(0, 0, 0)
-    // Save reference to shadowMesh to update color later
-    viewer.shadowRobotMesh = shadowMesh
-    viewer.shadowGroup.add(shadowMesh)
+  const meshBaseUrl = `http://${window.location.hostname}:8080/install/ugv_tracked_description/share/ugv_tracked_description/meshes/`
+  const shadowMaterial = new THREE.MeshStandardMaterial({
+    color: 0x00ffff,
+    roughness: 0.8,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false
+  })
+  const shadowVisualGroup = new THREE.Group()
+  viewer.shadowRobotMesh = shadowVisualGroup
+  viewer.shadowMaterial = shadowMaterial
+  viewer.shadowGroup.add(shadowVisualGroup)
 
-  }, undefined, (error) => {
-    console.error("Error loading STL:", error)
+  // shadow_base_link sits at Z=0 ground plane (base_link is +0.08m higher), so raise shadow meshes by +0.08m
+  const shadowParts = [
+    { file: 'base.STL', pos: [0.2953, 0.1689, -0.1679] },
+    { file: 'tracks.STL', pos: [0.2954, 0.1774, -0.1679] }
+  ]
+  const loader = new STLLoader()
+  shadowParts.forEach(({ file, pos }) => {
+    loader.load(meshBaseUrl + file, (geometry) => {
+      if (!viewer || !viewer.shadowGroup) {
+        geometry.dispose()
+        return
+      }
+      geometry.computeVertexNormals()
+      const mesh = new THREE.Mesh(geometry, shadowMaterial)
+      mesh.scale.set(1, 1, 1)
+      mesh.position.set(pos[0], pos[1], pos[2])
+      mesh.rotation.order = 'ZYX'
+      mesh.rotation.set(1.5708, 0, -1.5708)
+      shadowVisualGroup.add(mesh)
+      viewer?.requestRender?.()
+    }, undefined, (error) => {
+      console.error(`Error loading shadow STL (${file}):`, error)
+    })
   })
 }
 
@@ -533,44 +579,81 @@ function connectSceneData() {
   })
 
   // 4. Setup TF update for Robot and Shadow
-  let lastCoordUpdate = 0
-  const updateRobotPose = (tf) => {
-    robotGroup.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
-    robotGroup.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
+  const posesDiffer = (prev, tf, eps = 1e-5) => {
+    if (!prev) return true
+    const t = tf.translation
+    const r = tf.rotation
+    return (
+      Math.abs(t.x - prev.px) > eps ||
+      Math.abs(t.y - prev.py) > eps ||
+      Math.abs(t.z - prev.pz) > eps ||
+      Math.abs(r.x - prev.rx) > eps ||
+      Math.abs(r.y - prev.ry) > eps ||
+      Math.abs(r.z - prev.rz) > eps ||
+      Math.abs(r.w - prev.rw) > eps
+    )
+  }
+  const snapshotTf = (tf) => ({
+    px: tf.translation.x, py: tf.translation.y, pz: tf.translation.z,
+    rx: tf.rotation.x, ry: tf.rotation.y, rz: tf.rotation.z, rw: tf.rotation.w
+  })
 
-    if (isFollowingRobot.value && viewer && viewer.controls && viewer.camera) {
-      const currentTarget = new THREE.Vector3(
-        tf.translation.x,
-        tf.translation.y,
-        tf.translation.z + 0.3
-      )
-      if (lastFollowedTarget) {
-        const delta = currentTarget.clone().sub(lastFollowedTarget)
-        if (delta.lengthSq() > 1e-8) {
-          viewer.controls.target.add(delta)
-          viewer.camera.position.add(delta)
+  let lastCoordUpdate = 0
+  let coordsDirty = false
+  let lastRobotTf = null
+  const updateRobotPose = (tf) => {
+    const poseChanged = posesDiffer(lastRobotTf, tf)
+    if (poseChanged) {
+      lastRobotTf = snapshotTf(tf)
+      coordsDirty = true
+      robotGroup.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
+      robotGroup.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
+
+      if (isFollowingRobot.value && viewer && viewer.controls && viewer.camera) {
+        const currentTarget = new THREE.Vector3(
+          tf.translation.x,
+          tf.translation.y,
+          tf.translation.z + 0.3
+        )
+        if (lastFollowedTarget) {
+          const delta = currentTarget.clone().sub(lastFollowedTarget)
+          if (delta.lengthSq() > 1e-8) {
+            viewer.controls.target.add(delta)
+            viewer.camera.position.add(delta)
+          }
+        } else {
+          const offset = viewer.camera.position.clone().sub(viewer.controls.target)
+          viewer.controls.target.copy(currentTarget)
+          viewer.camera.position.copy(currentTarget).add(offset)
         }
-      } else {
-        const offset = viewer.camera.position.clone().sub(viewer.controls.target)
-        viewer.controls.target.copy(currentTarget)
-        viewer.camera.position.copy(currentTarget).add(offset)
+        lastFollowedTarget = currentTarget
       }
-      lastFollowedTarget = currentTarget
+
+      viewer?.requestRender?.()
     }
 
     // Throttle Vue reactivity to 10Hz to prevent layout thrashing
-    const now = performance.now()
-    if (now - lastCoordUpdate > 100) {
-      robotCoords.value = { x: tf.translation.x, y: tf.translation.y }
-      lastCoordUpdate = now
+    if (coordsDirty) {
+      const now = performance.now()
+      if (now - lastCoordUpdate > 100) {
+        robotCoords.value = { x: tf.translation.x, y: tf.translation.y }
+        lastCoordUpdate = now
+        coordsDirty = false
+      }
     }
   }
   
   tfClient.subscribe('base_footprint', updateRobotPose)
 
+  let lastShadowTf = null
   const updateShadowPose = (tf) => {
+    if (!posesDiffer(lastShadowTf, tf)) return
+    lastShadowTf = snapshotTf(tf)
     shadowGroup.position.set(tf.translation.x, tf.translation.y, tf.translation.z)
     shadowGroup.quaternion.set(tf.rotation.x, tf.rotation.y, tf.rotation.z, tf.rotation.w)
+    if (shadowGroup.visible) {
+      viewer?.requestRender?.()
+    }
   }
   tfClient.subscribe('shadow_base_link', updateShadowPose)
   
@@ -680,7 +763,10 @@ function connectSceneData() {
     releaseNavPointerCapture(activeNavPointerId)
     activeNavPointerId = null
     dragStartPoint = null
-    navGoalArrow.visible = false
+    if (navGoalArrow.visible) {
+      navGoalArrow.visible = false
+      viewer?.requestRender?.()
+    }
     if (viewer && viewer.controls) viewer.controls.enabled = true
   }
 
@@ -731,6 +817,7 @@ function connectSceneData() {
     navGoalArrow.rotation.set(0, 0, robotRot.z)
     arrowMesh.scale.set(0.35, 1, 1)
     navGoalArrow.visible = true
+    viewer?.requestRender?.()
 
     hoverCoords.value = { x: point.x, y: point.y }
     if (viewer && viewer.controls) viewer.controls.enabled = false
@@ -763,6 +850,7 @@ function connectSceneData() {
       arrowMesh.scale.set(0.35, 1, 1)
     }
     navGoalArrow.visible = true
+    viewer?.requestRender?.()
   }
   window.addEventListener('pointermove', dragMoveHandler, { capture: true, passive: false })
 
@@ -826,12 +914,16 @@ function connectSceneData() {
   activeTopics.push(pathSub)
 
   pathSub.subscribe((message) => {
+    const hadPath = Boolean(pathLine)
     if (pathLine) {
       disposeThreeObject(pathLine)
       pathLine = null
     }
 
-    if (!message.poses || message.poses.length === 0) return
+    if (!message.poses || message.poses.length === 0) {
+      if (hadPath) viewer?.requestRender?.()
+      return
+    }
 
     const points = []
     message.poses.forEach(p => {
@@ -847,6 +939,7 @@ function connectSceneData() {
 
     pathLine = new THREE.Line(geometry, material)
     viewer.scene.add(pathLine)
+    viewer?.requestRender?.()
   })
 
   // 9. Shadow Robot Marker Status (Color / Visibility)
@@ -857,12 +950,32 @@ function connectSceneData() {
   })
   activeTopics.push(shadowMarkerSub)
 
+  let lastShadowMarker = null
   shadowMarkerSub.subscribe((msg) => {
-    if (viewer && viewer.shadowRobotMesh) {
-      const mat = viewer.shadowRobotMesh.material
-      mat.color.setRGB(msg.color.r, msg.color.g, msg.color.b)
-      mat.opacity = msg.color.a
-      viewer.shadowRobotMesh.visible = (msg.color.a > 0.0 && msg.pose.position.z > -1.0)
+    if (viewer && viewer.shadowRobotMesh && viewer.shadowMaterial) {
+      const mat = viewer.shadowMaterial
+      const nextVisible = (msg.color.a > 0.0 && msg.pose.position.z > -1.0)
+      const changed = !lastShadowMarker ||
+        lastShadowMarker.visible !== nextVisible ||
+        Math.abs(lastShadowMarker.r - msg.color.r) > 1e-3 ||
+        Math.abs(lastShadowMarker.g - msg.color.g) > 1e-3 ||
+        Math.abs(lastShadowMarker.b - msg.color.b) > 1e-3 ||
+        Math.abs(lastShadowMarker.a - msg.color.a) > 1e-3
+      if (changed) {
+        lastShadowMarker = {
+          r: msg.color.r,
+          g: msg.color.g,
+          b: msg.color.b,
+          a: msg.color.a,
+          visible: nextVisible
+        }
+        mat.color.setRGB(msg.color.r, msg.color.g, msg.color.b)
+        mat.opacity = msg.color.a
+        viewer.shadowRobotMesh.visible = nextVisible
+        if (viewer.shadowGroup?.visible) {
+          viewer.requestRender?.()
+        }
+      }
     }
   })
 
@@ -879,11 +992,15 @@ function connectSceneData() {
   activeTopics.push(shadowPathSub)
 
   shadowPathSub.subscribe((message) => {
+    const hadShadowPath = Boolean(shadowPathLine)
     if (shadowPathLine) {
       disposeThreeObject(shadowPathLine)
       shadowPathLine = null
     }
-    if (!message.poses || message.poses.length === 0) return
+    if (!message.poses || message.poses.length === 0) {
+      if (hadShadowPath) viewer?.requestRender?.()
+      return
+    }
 
     const points = []
     message.poses.forEach(p => {
@@ -894,11 +1011,14 @@ function connectSceneData() {
     const material = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 3 })
     shadowPathLine = new THREE.Line(geometry, material)
     viewer.scene.add(shadowPathLine)
+    viewer?.requestRender?.()
   })
   viewerInitialized.value = true
 }
 
 onBeforeUnmount(() => {
+  unregisterCameraGamepad?.()
+  unregisterCameraGamepad = null
   if (themeChangedHandler) {
     window.removeEventListener('theme-changed', themeChangedHandler)
     themeChangedHandler = null
@@ -908,6 +1028,8 @@ onBeforeUnmount(() => {
     urdfModel.dispose()
     urdfModel = null
   }
+  disposeThreeObject(shadowGroup)
+  shadowGroup.clear()
   viewerRef.value = null
   if (viewer) {
     viewer.dispose()

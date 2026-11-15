@@ -18,6 +18,10 @@ export const useRosStore = defineStore('ros', {
     queueMode: false,
     lapsCount: 1,
     activeRobotType: null, // 'base' or 'shadow'
+    driveTarget: 'base', // Preserved drive target ('base' | 'shadow') across tabs
+    gamepadConnected: false,
+    gamepadName: '',
+    gamepadMode: 'drive', // 'off' | 'drive' | 'arm'
     lightOn: false,
     radiationStatus: {
       geiger_active: false,
@@ -80,6 +84,25 @@ export const useRosStore = defineStore('ros', {
     },
     setActiveRobotType(type) {
       this.activeRobotType = type
+      if (type === 'base' || type === 'shadow') {
+        this.driveTarget = type
+      }
+    },
+    setDriveTarget(target) {
+      const normalized = target === 'shadow' ? 'shadow' : 'base'
+      this.driveTarget = normalized
+      if (this.activeRobotType !== null) {
+        this.activeRobotType = normalized
+      }
+    },
+    setGamepadState(connected, name = '') {
+      this.gamepadConnected = Boolean(connected)
+      this.gamepadName = connected ? String(name || 'Gamepad') : ''
+    },
+    setGamepadMode(mode) {
+      if (mode === 'off' || mode === 'drive' || mode === 'arm') {
+        this.gamepadMode = mode
+      }
     },
     setLightState(state) {
       this.lightOn = state

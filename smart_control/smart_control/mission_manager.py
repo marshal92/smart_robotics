@@ -4,11 +4,20 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+import os
+import shlex
 import subprocess
 import time
 import threading
 import math
 import json
+
+DEFAULT_CYCLONEDDS_URI = (
+    "<CycloneDDS><Domain><Discovery>"
+    "<ParticipantIndex>auto</ParticipantIndex>"
+    "<MaxAutoParticipantIndex>500</MaxAutoParticipantIndex>"
+    "</Discovery></Domain></CycloneDDS>"
+)
 
 from nav2_msgs.srv import ClearEntireCostmap
 from slam_toolbox.srv import Pause
@@ -65,13 +74,22 @@ class MissionManager(Node):
 
     # HELPER TO BUILD ROBUST SHELL COMMAND FOR TMUX
     def _build_tmux_ros_cmd(self, cmd: str) -> str:
-        return (
-            "source /opt/ros/jazzy/setup.bash && "
-            "source ~/ros2_ws/install/setup.bash && "
-            "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp && "
-            "[ -f /home/oleksandr/cyclonedds.xml ] && export CYCLONEDDS_URI=file:///home/oleksandr/cyclonedds.xml; "
-            f"exec {cmd}"
-        )
+        cyclone_uri = os.environ.get("CYCLONEDDS_URI", "").strip()
+        if not cyclone_uri:
+            home_xml = os.path.expanduser("~/cyclonedds.xml")
+            cyclone_uri = f"file://{home_xml}" if os.path.isfile(home_xml) else DEFAULT_CYCLONEDDS_URI
+
+        setup_parts = ["source /opt/ros/jazzy/setup.bash"]
+        ws_setup = os.path.expanduser("~/ros2_ws/install/setup.bash")
+        if os.path.isfile(ws_setup):
+            setup_parts.append(f"source {shlex.quote(ws_setup)}")
+
+        setup_parts.extend([
+            "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp",
+            f"export CYCLONEDDS_URI={shlex.quote(cyclone_uri)}",
+        ])
+        inner = " && ".join(setup_parts) + f" && exec {cmd}"
+        return f"bash -c {shlex.quote(inner)}"
 
     # RADIATION SUBSYSTEM PROCESS LIFECYCLE
 
@@ -291,7 +309,7 @@ class MissionManager(Node):
             self.get_logger().info("SLAM Toolbox toggled")
 
     def _native_save_map(self, map_name):
-        map_path = f"/home/oleksandr/ros2_ws/src/smart_robotics/smart_nav/maps/{map_name}"
+        map_path = os.path.expanduser(f"~/ros2_ws/src/smart_robotics/smart_nav/maps/{map_name}")
         self.get_logger().info(f"Saving SLAM map to {map_path}...")
 
         # Save Pose Graph (For Lifelong SLAM)

@@ -251,34 +251,6 @@ defineExpose({
   gap: 10px;
 }
 
-.segmented-control {
-  display: flex;
-  flex: 1;
-  gap: 4px;
-  background: var(--bg-item);
-  padding: 2px;
-  border-radius: 3px;
-  border: 1px solid var(--border);
-}
-
-.seg-btn {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  padding: 4px 6px;
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.seg-btn.active {
-  background: var(--border-focus);
-  color: #ffffff;
-}
-
 .rotation-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

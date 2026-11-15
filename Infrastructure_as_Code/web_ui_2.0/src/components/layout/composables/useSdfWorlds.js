@@ -36,6 +36,7 @@ export function useSdfWorlds(viewerRef) {
       viewer.scene.remove(sdfWorldGroup)
       _disposeGroup(sdfWorldGroup)
       sdfWorldGroup = null
+      viewer.requestRender?.()
     }
 
     const targetGroup = new THREE.Group()
@@ -139,6 +140,7 @@ export function useSdfWorlds(viewerRef) {
                 }
                 
                 linkGroup.add(mesh)
+                viewerRef.value?.requestRender?.()
               })
             })
           })
@@ -156,6 +158,7 @@ export function useSdfWorlds(viewerRef) {
           child.material.depthWrite = sdfOpacity.value > 0.99
         }
       })
+      viewerRef.value?.requestRender?.()
     }
   }
 
@@ -163,6 +166,7 @@ export function useSdfWorlds(viewerRef) {
     show3DWorld.value = !show3DWorld.value
     if (sdfWorldGroup) {
       sdfWorldGroup.visible = show3DWorld.value
+      viewerRef.value?.requestRender?.()
     }
   }
   
@@ -173,6 +177,7 @@ export function useSdfWorlds(viewerRef) {
       viewer.scene.remove(sdfWorldGroup)
       _disposeGroup(sdfWorldGroup)
       sdfWorldGroup = null
+      viewer.requestRender?.()
     }
   }
 

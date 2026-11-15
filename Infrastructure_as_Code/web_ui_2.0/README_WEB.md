@@ -54,22 +54,23 @@ Web UI 2.0 was specifically engineered to prevent main-thread stalls, WebSocket 
    * Subscribes directly to `/tf` and `/tf_static`, resolving transform chains back to `fixedFrame` (`map`, max hop guard `20`).
    * Reuses pre-allocated `THREE.Vector3` and `THREE.Quaternion` scratch instances during traversal to avoid per-frame garbage collection churn, and batches subscriber notifications into a single `requestAnimationFrame` pass when new transforms arrive.
 
-2. **Atomic PNG Transport for Costmaps & Radiation (`useMapLayer.js`, `useRadiationMap.js`)**
+2. **Atomic PNG Transport & Lazy Radiation Decode (`useMapLayer.js`, `useRadiationMap.js`)**
    * Instead of serializing large `nav_msgs/msg/OccupancyGrid` arrays over WebSocket JSON, [`map_to_image.py`](../../smart_server/smart_server/map_to_image.py) flips and encodes a single-channel grayscale PNG on `/map_image/compressed` (`hash`-cached when unchanged).
    * Map geometry metadata is embedded atomically inside `msg.header.frame_id`:
      ```text
      map|<resolution>|<origin.x>|<origin.y>|<origin.z>|<quat.x>|<quat.y>|<quat.z>|<quat.w>
      ```
    * This prevents visual tearing or misalignment between map pixels and world coordinates when SLAM dynamically expands map dimensions. When resolution or pixel dimensions are stable, `useMapLayer` swaps only `texture.image` without reallocating the WebGL `PlaneGeometry` or `THREE.Texture`.
+   * `useRadiationMap.js` avoids background PNG decoding while the radiation overlay is hidden (`showRadiation === false`), buffering only the latest compressed message (`pendingMsg`) until toggled ON.
 
-3. **Scoped Throttling & Lazy Media Subscriptions**
+3. **Shared `/joint_states` Bus, Deadbands & Lazy Media Subscriptions**
    * **Camera stream (`CameraStream.vue`)**: Subscribes to compressed JPEG topics only while mounted (`onMounted`), switches cleanly between RAW and YOLO streams, and immediately unsubscribes on unmount (`onBeforeUnmount`).
-   * **URDF joint animation (`robotModel.js`)**: Throttled to `~30 Hz` (`33 ms` minimum interval); UI joint slider feedback in `ArmControl.vue` is throttled separately to `10 Hz` (`100 ms`).
-   * **3D coordinate readout & raycasting (`DigitalTwin3D.vue`)**: Robot pose HUD reactivity throttles to `10 Hz` (`100 ms`), while cursor hover raycasting onto the map plane throttles to `20 Hz` (`50 ms`).
+   * **Single `/joint_states` bus (`rosConnection.js` -> `robotModel.js`, `useArmRos.js`)**: `subscribeJointStates` shares a single `/joint_states` `ROSLIB.Topic` across 3D URDF animation and arm telemetry instead of duplicating WebSocket subscriptions or subscribing directly to `/arm_joint_states`. Both consumers throttle updates to `~30 Hz` (`33 ms`) with `1e-4` rad change deadbands (`JOINT_RENDER_EPS` / `JOINT_EPS`); local FK fallback (`computeArmToolFrame`) throttles to `~10 Hz` (`100 ms`).
+   * **3D coordinate readout & raycasting (`DigitalTwin3D.vue`)**: `posesDiffer()` (`eps = 1e-5`) filters redundant TF renders, robot pose HUD reactivity throttles to `10 Hz` (`100 ms`), and cursor hover raycasting onto the map plane throttles to `20 Hz` (`50 ms`).
    * **Signature-cached waypoint markers (`useWaypoints.js`)**: Hashes each marker pose/color/label (`userData.sig`) so unchanged markers only toggle `.visible` instead of rebuilding Canvas sprite textures and cylinder geometries.
 
-4. **Deterministic GPU & Async Cleanup**
-   * `createViewer.js` caps pixel ratio at `Math.min(window.devicePixelRatio, 1.5)` and tears down the `requestAnimationFrame` loop, `ResizeObserver`, `OrbitControls`, and WebGL context on unmount.
+4. **On-Demand Rendering & Deterministic GPU/Async Cleanup**
+   * `createViewer.js` caps pixel ratio at `Math.min(window.devicePixelRatio, 1.5)`, uses **on-demand `requestRender()`** scheduling (redrawing only on camera `OrbitControls` movement, resize, background changes, scene/layer updates, or `posesDiffer` / `JOINT_RENDER_EPS` threshold crossings rather than an idle 60 FPS loop), and tears down animation frames, `ResizeObserver`, `OrbitControls`, and WebGL resources on unmount.
    * `useMapLayer.js`, `useRadiationMap.js`, and `useSdfWorlds.js` increment generation counters (`generation` / `loadGeneration`) so delayed HTTP fetches or image `onload` callbacks from prior sessions are discarded without touching disposed scenes.
    * `robotModel.js`, `armTrail.js`, and `DigitalTwin3D.vue` explicitly dispose geometries, materials, textures, and event listeners on ROS disconnect or unmount.
 
@@ -83,45 +84,46 @@ web_ui_2.0/
 ├── package.json                             # Dependencies: vue, pinia, roslib, three, urdf-loader, vite
 ├── vite.config.js                           # Minimal Vite config (@vitejs/plugin-vue; no dev proxy)
 ├── build_ui.sh                              # Helper script sourcing $HOME/.nvm before `npm run build`
-├── fix-web-ui-haze.patch                    # Legacy ros3djs patch retained for historical reference (unused)
-├── README.md                                # This technical reference
+├── README_WEB.md                            # This technical reference
 ├── dist/                                    # Compiled production assets served directly by smart_server/web_server.py
 └── src/
     ├── main.js                              # Creates Vue app + Pinia store and mounts to #app
-    ├── App.vue                              # Root layout shell, responsive bar (<=1024px), collapsible 125px bottom dock
+    ├── App.vue                              # Root layout shell, responsive bar (<=1024px), dock, lifecycle for Gamepad service
     ├── style.css                            # Shared CSS design tokens (dark & light CAD themes), shared button/input classes
     ├── stores/
-    │   └── rosStore.js                      # Pinia store (`useRosStore`): ROS state, telemetry, waypoints, queues, arm trail
+    │   └── rosStore.js                      # Pinia store (`useRosStore`): ROS state, telemetry, waypoints, queues, arm trail, drive/gamepad mode
     ├── services/
-    │   ├── rosConnection.js                 # ROSLIB singleton, /smart_command, /smart_telemetry, /cmd_vel*, camera & logs
+    │   ├── rosConnection.js                 # ROSLIB singleton, shared `/joint_states` bus (`subscribeJointStates`), `/smart_command`, `/cmd_vel*`, camera & logs
     │   ├── simpleTfClient.js                # Client-side TF2 chain solver subscribing to /tf & /tf_static
-    │   └── teleopCore.js                    # 10 Hz Twist loop combining DPad keyboard/buttons & TouchJoystick analog input
+    │   ├── teleopCore.js                    # 10 Hz Twist loop combining DPad keyboard/buttons & TouchJoystick/Gamepad analog input
+    │   └── gamepadService.js                # Browser Gamepad API adapter for Xbox Series X (50 ms connected-only poll, DRIVE & ARM modes)
     ├── three/
-    │   ├── createViewer.js                  # Z-up Three.js scene, camera, lighting, OrbitControls, ResizeObserver
-    │   ├── robotModel.js                    # Fetches robot_description, parses URDF/STL, animates joints & TF root
+    │   ├── createViewer.js                  # Z-up Three.js scene, camera, lighting, OrbitControls, ResizeObserver, on-demand `requestRender()`
+    │   ├── robotModel.js                    # Fetches robot_description, parses URDF/STL, animates joints (via `/joint_states` bus) & TF root
     │   └── armTrail.js                      # Live cyan TCP trail (max 1500 pts) + dashed amber planned trajectory
     └── components/
         ├── layout/
         │   ├── AppHeader.vue                # Brand, CAD light/dark toggle, TelemetryHUD, ConnectionBox, global STOP
-        │   ├── TelemetryHUD.vue             # Monospace HUD: FSM, VEL, RAD, NAV, LIGHT state
+        │   ├── TelemetryHUD.vue             # Monospace HUD: FSM, VEL, RAD, NAV, LIGHT, clickable PAD status badge
         │   ├── ConnectionBox.vue            # Dynamic ws://<hostname>:9090 input/pill & connection state badge
         │   ├── DigitalTwin3D.vue            # 3D canvas host, Center Camera, Nav Goal drag arrow, Shadow twin & paths
         │   ├── NavPopup.vue                 # Floating waypoint overlay (CANCEL, RESUME, named go_to_named triggers)
         │   └── composables/
         │       ├── useMapLayer.js           # /map_image/compressed -> PlaneGeometry + dynamic PNG texture
-        │       ├── useRadiationMap.js       # /radiation_image/compressed -> translucent overlay layer (+0.005 m Z)
+        │       ├── useRadiationMap.js       # /radiation_image/compressed -> lazy-decoded translucent overlay (+0.005 m Z)
         │       ├── useSdfWorlds.js          # Parses SDF XML + loads STL world environments with adjustable opacity
         │       ├── useWaypoints.js          # Renders /smart_waypoints_markers cylinders & Canvas text sprites
         │       └── useNavSpeed.js           # Publishes `system` -> `set_speed:<m/s>` (0.1–2.0 m/s)
         ├── teleop/
         │   ├── TeleopTabs.vue               # Right control pane: Manager, Teleop, Arm, Radiation tabs
-        │   ├── ArmControl.vue               # Modular 6-DOF manipulator shell: Unfold/Fold/3D Trail + JOINTS/MANUAL/AUTO/SERVO tabs
+        │   ├── ArmControl.vue               # 6-DOF manipulator shell: Unfold/Fold/TRAIL/CLEAR + vertical folder tabs + compact Tool Pose row
         │   ├── arm/
-        │   │   ├── useArmRos.js             # Shared ROS topic/action composable & hybrid FK/TF pose telemetry for arm tabs
-        │   │   ├── armKinematics.js         # URDF 3D FK, 2D cylindrical boom DLS Jacobian & J3/J5 roll compensation
-        │   │   ├── armPanel.css             # Shared styles across ArmControl sub-tabs
-        │   │   ├── ArmJointsTab.vue         # J0..J5 direct sliders, presets & Joint Route Sequencer
-        │   │   ├── ArmManualTab.vue         # Cylindrical 2.5D manual kinematics (DLS R/Z, auto-level J4, J3+J5)
+        │   │   ├── useArmRos.js             # Shared ROS topic/action composable, `arm_clamp` trajectory helper & hybrid FK/TF telemetry
+        │   │   ├── armKinematics.js         # URDF 3D FK, 2D cylindrical boom DLS Jacobian, J3/J5 roll comp & gripper limits
+        │   │   ├── armPanel.css             # Shared styles across ArmControl folder binder & sub-tabs
+        │   │   ├── ArmJointsTab.vue         # J0..J5 direct sliders, ±5° steppers & saved pose presets
+        │   │   ├── ArmManualTab.vue         # Cylindrical 2.5D kinematics (side-by-side Boom/Wrist D-Pads, Z/Roll strips, Gripper & Sequencer)
+        │   │   ├── ArmRouteSequencer.vue    # Sequential Joint Route Builder (`+ ROBOT` live snapshot, pause/duration, loop, playback)
         │   │   ├── ArmAutoTab.vue           # MoveIt ON/OFF, Control Hub CSV missions, GOTO_XYZ & execution logs
         │   │   └── ArmServoTab.vue          # Servo ON/OFF, Cartesian IK D-Pad & PITCH/ROLL/YAW teleop
         │   ├── DPad.vue                     # Base/Shadow directional pad + global WASD / Arrow-key teleop bindings
@@ -151,6 +153,7 @@ web_ui_2.0/
   * `RAD` (µSv/h, zero-deadband `< 0.005`)
   * `NAV` (status string from `/smart_telemetry`)
   * `LIGHT` (status indicator synced to `store.lightOn`)
+  * `PAD:*` (shown only while a gamepad is connected; displays `PAD:OFF`, `PAD:DRV`, `PAD:SHD`, or `PAD:ARM` and toggles `gamepadMode` between `DRIVE` and `ARM` on click)
 * **Connection Box (`ConnectionBox.vue`):** Initializes `wsUrl` automatically from `ws://${window.location.hostname || '127.0.0.1'}:9090`. Once connected, collapses into a clickable status pill (`● ws://...`) allowing runtime reconnection to another bridge address.
 * **Global `🛑 STOP`:** Dispatches `{ target_system: 'nav', command: 'cancel', payload_json: '{"x":0,"y":0,"yaw":0}' }` and zero velocity on `/cmd_vel`.
 
@@ -196,24 +199,26 @@ Configured in `src/three/createViewer.js` and orchestrated by `src/components/la
   * Radiation layer & virtual Geiger toggles (`rad_on`/`rad_off`, `rad_geiger_on`/`rad_geiger_off`), synchronized with `/radiation/status` JSON.
   * Survey recording (`rad_record:explored_map.npy`, `rad_stop`, `rad_save`, `rad_clear`) and map presets (`rad_load:<file.npy>`).
 
-### Chassis & Shadow Teleop (`TeleopTabs.vue`, `DPad.vue`, `TouchJoystick.vue`, `SpeedSlider.vue`, `teleopCore.js`)
-* **Target Toggle (`BASE` / `SHADOW`):** Routes `/cmd_vel` to the physical/simulated chassis OR `/cmd_vel_shadow` to the virtual Shadow twin. In `SHADOW` mode, exposes quick buttons for `ENABLE` (`shadow_on`), `DISABLE` (`shadow_off`), `CLEAR` (`operator:clear`), and `EXEC` (`operator:execute`).
-* **`10 Hz` Velocity Streaming (`teleopCore.js`):** Pressing on-screen `DPad` arrows, keyboard keys (`W/A/S/D` or Arrow keys, automatically ignored when focus is inside `<input>`, `<textarea>`, `<select>`, or `contentEditable`), or dragging the floating 3D `TouchJoystick` (`JOYSTICK` toggle) runs a `100 ms` publish loop using `teleopSpeed` (`0.1–2.0 m/s`, default `0.5 m/s`, synced between `SpeedSlider.vue` and `TouchJoystick.vue`).
-* **Motion Safety Failsafes:** Velocity immediately stops on tab switch (`setTab`), `mouseup`, `mouseleave`, `pointerup`, `pointercancel`, `lostpointercapture`, `touchend`, `touchcancel`, `window` blur, key release, or component unmount.
+### Chassis & Shadow Teleop (`TeleopTabs.vue`, `DPad.vue`, `TouchJoystick.vue`, `SpeedSlider.vue`, `teleopCore.js`, `gamepadService.js`)
+* **Target Toggle (`BASE` / `SHADOW`):** Routes `/cmd_vel` to the physical/simulated chassis OR `/cmd_vel_shadow` to the virtual Shadow twin, synced via `store.driveTarget` across tabs and gamepad drive mode. In `SHADOW` mode, exposes quick buttons for `ENABLE` (`shadow_on`), `DISABLE` (`shadow_off`), `CLEAR` (`operator:clear`), and `EXEC` (`operator:execute`).
+* **`10 Hz` Velocity Streaming (`teleopCore.js`):** Pressing on-screen `DPad` arrows, keyboard keys (`W/A/S/D` or Arrow keys, automatically ignored when focus is inside `<input>`, `<textarea>`, `<select>`, or `contentEditable`), dragging the floating 3D `TouchJoystick` (`JOYSTICK` toggle), or using an Xbox Series X controller in `DRIVE` mode (`RT` forward, `LT` reverse, `Left Stick X` steer, `Right Stick X/Y` orbit 3D camera, `R3` toggle `FOLLOW` camera, `D-Pad Left/Right` speed `±0.1 m/s`, `D-Pad Up/Down` Unfold/Fold, `View` switch `DRIVE`/`ARM`, `Y` light toggle, `B` emergency stop) runs a `100 ms` publish loop using `teleopSpeed` (`0.1–2.0 m/s`, default `0.5 m/s`, synced between `SpeedSlider.vue` and `TouchJoystick.vue`).
+* **Motion Safety Failsafes:** Velocity immediately stops on tab switch (`setTab`), `mouseup`, `mouseleave`, `pointerup`, `pointercancel`, `lostpointercapture`, `touchend`, `touchcancel`, `window` blur, hidden document visibility, gamepad disconnect / `B` E-stop, key release, or component unmount.
 
 ### 6-DOF Manipulator (`ArmControl.vue` & `src/components/teleop/arm/`)
-* **Common Header Bar (all sub-tabs, works without MoveIt/Servo):**
+* **Common Header Bar & Vertical Binder Tabs (works without MoveIt/Servo):**
   * `Unfold`: Publishes target stand pose `[0, 57.3, -57.3, 0, -45, 0]°` over `3.0 s` to `/arm_controller/joint_trajectory` and triggers `/web_teleop/unfold`.
   * `Fold`: Publishes home pose `[0, 0, 0, 0, 0, 0]°` over `3.0 s` and triggers `/web_teleop/fold`.
-  * `3D TRAIL` / `CLEAR`: Toggles or clears the browser-side `ArmTrailManager` TCP path rendered directly from local URDF/TF (`robotModel.js`).
+  * `TRAIL: ON/OFF` / `CLEAR`: Toggles or clears the browser-side `ArmTrailManager` TCP path rendered directly from local URDF/TF (`robotModel.js`).
+  * Left vertical folder-binder tabs switch between **`JOINTS`**, **`MANUAL`**, **`AUTO`**, and **`SERVO`**, preserving panel width (`max-width: 504px`) while automatically halting active manual/route/servo motion on tab transitions.
 * **`JOINTS` Sub-tab (`ArmJointsTab.vue`) — Tab 1:**
-  * Direct sliders + `±5°` step buttons + numeric inputs for `arm_joint_0..5` (`SYNC`, `SAVE` pose, dropdown preset loader, `RUN` with configurable move duration `>= 0.2 s`). Pressing `±5°` syncs all slider values from live `/joint_states` first before stepping the selected joint (`0.5 s` move).
-  * **`JOINT ROUTE SEQUENCER`:** Build multi-step joint sequences (`+ ADD TO ROUTE` from sliders/selected pose, or `+ FROM ROBOT` syncing live robot angles), configure per-step move duration (`>= 0.3 s`) and post-move pause (`w`, `s`), reorder (`▲`/`▼`), load any step back to sliders, toggle `LOOP`, and save/load named routes.
-  * **Sequential Cancelability:** Each route step is sent sequentially over a cancelable `50 ms`-polled timer as a **single-point** `trajectory_msgs/JointTrajectory` message to `/arm_controller/joint_trajectory`. In [`trajectory_bridge.cpp`](../../smart_plugins/src/trajectory_bridge.cpp), single-point messages dispatch straight to ESP32 servos without spawning a detached `sleep_for` thread, so clicking `⏹ STOP` cancels the wait loop and immediately commands a `0.1 s` hold at current angles.
-* **`MANUAL` Sub-tab (`ArmManualTab.vue`) — Tab 2:**
+  * Direct sliders + `±5°` step buttons + numeric inputs for `arm_joint_0..5` (`SYNC`, `SAVE` pose, dropdown preset loader, `RUN` with configurable move duration `>= 0.5 s`).
+* **`MANUAL` Sub-tab (`ArmManualTab.vue` + `ArmRouteSequencer.vue`) — Tab 2:**
   * Backend-free **cylindrical 2.5D kinematics** executed in-browser (`armKinematics.js`) at `50 ms` ticks (`time_from_start: 0.08 s`) directly onto `/arm_controller/joint_trajectory` with target-state latching on press and strict URDF joint limit clamping.
-  * **Boom Control (`R / Z / Yaw`):** `BASE L/R` jogs `arm_joint_0`, while `REACH +/-(FWD/BACK)` and `UP/DOWN (Z±)` solve analytical $2\times 2$ Damped Least Squares ($\lambda = 0.015$) on shoulder/elbow (`arm_joint_1`, `arm_joint_2`, $L_1=0.274\text{ m}$, $L_2=0.216\text{ m}$) with singularity/workspace boundary protection and toggleable **`AUTO-LEVEL WRIST (J4)`** pitch compensation.
-  * **Wrist & Tool Control:** `PITCH UP/DOWN` drives `arm_joint_4`, `ROLL L/R` drives `arm_joint_5`, and `WRIST L/R` steers `arm_joint_3` with real-time `arm_joint_5` roll leveling via exact FK Jacobian so the gripper jaws remain parallel to the ground.
+  * **Side-by-Side Dual D-Pads:** Left **Boom** column (`R+`/`R-` reach, `BASE` yaw on `arm_joint_0`, plus `Z±` lift strip underneath) solves analytical $2\times 2$ Damped Least Squares ($\lambda = 0.015$) on shoulder/elbow (`arm_joint_1`, `arm_joint_2`, $L_1=0.274\text{ m}$, $L_2=0.216\text{ m}$) with singularity/workspace protection and toggleable **`LVL J4`** (`autoLevelWrist`) pitch compensation; right **Wrist** column (`PITCH` on `arm_joint_4`, `WRIST L/R` yaw on `arm_joint_3` with real-time `arm_joint_5` FK-Jacobian roll leveling, plus dedicated `ROLL` strip underneath).
+  * **Xbox Series X Gamepad Switch (`XBOX`: `OFF | DRIVE · BASE/SHD | ARM`):** When a controller is connected over USB-C or Bluetooth (`gamepadService.js`, zero idle polling when disconnected), `View` switches between `DRIVE` and `ARM` modes, `D-Pad Up/Down` triggers `Unfold`/`Fold` and `D-Pad Left/Right` adjusts speed (`±0.1 m/s` or `±10%`). In `DRIVE` mode `Right Stick X/Y` orbits the 3D camera and `R3` toggles robot `FOLLOW`. In `ARM` mode all 7 axes map simultaneously (`Left Stick Y/X` = Reach `R` & Base Yaw `J0`, `Right Stick Y/X` = Wrist Pitch `J4` & inverted Wrist Yaw `J3/J5`, `RT/LT` = Height `Z+/Z-`, `RB/LB` = Roll `J5`, `A/X` = Gripper Close/Open, `R3` = `LVL J4`, `Y` = Light, `B` = Emergency Stop). MoveIt `SERVO` is intentionally left untouched.
+  * **Compact Gripper Bar (`GRIP`):** Drives `arm_clamp` (`[-0.5, +0.5]` rad) cleanly via `/arm_controller/joint_trajectory` (`publishClampRad` in `useArmRos.js`).
+  * **`JOINT ROUTE SEQUENCER` (`ArmRouteSequencer.vue`):** Single-row action bar with `+ ROBOT` (captures live robot joint angles directly from `/joint_states`), `CLEAR`, `LOOP`, `▶ RUN`, and `⏹ STOP`, editable step duration (`>= 0.3 s`) / pause (`w`, `s`), step reorder (`▲`/`▼`), and named route save/load.
+  * **Sequential Cancelability:** Each route step is sent sequentially over a cancelable `50 ms`-polled timer as a **single-point** `trajectory_msgs/JointTrajectory` message to `/arm_controller/joint_trajectory`. In [`trajectory_bridge.cpp`](../../smart_plugins/src/trajectory_bridge.cpp), single-point messages dispatch straight to ESP32 servos without spawning a detached `sleep_for` thread, so clicking `⏹ STOP` cancels the wait loop and immediately commands a `0.1 s` hold at current angles.
 * **`AUTO` Sub-tab (`ArmAutoTab.vue`) — Tab 3:**
   * `MoveIt ON` / `MoveIt OFF`: Dispatches `system:arm_moveit_on` / `system:arm_moveit_off` to `twin_orchestrator.py`, managing `arm_moveit_session` (`smart_server/launch/arm_moveit.launch.py`: `move_group` headless without RViz, `tactical_server`, `control_hub`).
   * Publishes `EXECUTE_CSV` with selected CSV path and speed ratio (`5–100%`, default `30%`) to `/web_teleop/hub_request`, displaying progress, `/web_teleop/hub_status` logs, and the dashed amber planned preview in `3D`.
@@ -221,8 +226,8 @@ Configured in `src/three/createViewer.js` and orchestrated by `src/components/la
 * **`SERVO` Sub-tab (`ArmServoTab.vue`) — Tab 4:**
   * `Servo ON` / `Servo OFF`: Dispatches `system:arm_servo_on` / `system:arm_servo_off` to `twin_orchestrator.py`, managing `arm_servo_session` (`smart_server/launch/arm_servo.launch.py`: standalone `servo_node` with `is_primary_planning_scene_monitor=True` + `teleop_manager`).
   * **Cartesian IK Jogging:** `X±/Y±/Z±` translation and `PITCH/ROLL/YAW` rotation buttons publish `geometry_msgs/TwistStamped` at `10 Hz` to `/web_teleop/cmd_vel` in `arm_base_link` (`BASE`) or `arm_tool0` (`TOOL`), scaled by `SPEED` (`1–100%`, default `50%`). Releasing any jog control sends zero twist immediately and redundantly `40 ms` later; global release/`blur` listeners prevent runaway jogging.
-* **Shared Tool Pose Telemetry (`TOOL POSE TELEMETRY (BASE FRAME)`):**
-  * Visible across all tabs even without `servo_node`/`teleop_manager`: uses `/web_teleop/tool_pose` (`LIVE 5Hz`) when Servo telemetry is active, and automatically falls back to browser-side URDF forward kinematics (`computeArmToolFrame` from `/joint_states`, `LIVE FK`) when MoveIt/Servo are off.
+* **Compact Single-Row Tool Pose Telemetry (`TOOL POSE TELEMETRY (BASE · mm / °)`):**
+  * Shared footer across all 4 tabs displaying `X | Y | Z | R | P | YAW` in one horizontal row: uses `/web_teleop/tool_pose` (`LIVE 5Hz`) when Servo telemetry is active, and automatically falls back to browser-side URDF forward kinematics (`computeArmToolFrame` from `/joint_states`, `LIVE FK`) when MoveIt/Servo are off.
 
 ### Bottom Dock: Waypoints, Queue & Creator (`QuickActions.vue`, `WaypointCreator.vue`, `RosConsole.vue`)
 * **Actions:** `LIGHT` (`/cmd_light`), `Sampling` (`payload:mock_sample`), `▶ RESUME` (`operator:RESUME` + `nav:resume`), `CLEAR` (`system:clear_costmaps`).
@@ -241,7 +246,7 @@ Configured in `src/three/createViewer.js` and orchestrated by `src/components/la
 | Topic | Message Type | Consumer Component / Service | Notes |
 |---|---|---|---|
 | `/tf`, `/tf_static` | `tf2_msgs/msg/TFMessage` | `SimpleTFClient` | Direct client-side kinematics to `map` |
-| `/joint_states` | `sensor_msgs/msg/JointState` | `robotModel.js` (30 Hz), `ArmControl.vue` (10 Hz) | 3D URDF joints + `arm_joint_0..5` sliders |
+| `/joint_states` | `sensor_msgs/msg/JointState` | `rosConnection.js` (`subscribeJointStates` bus) -> `robotModel.js` (30 Hz) & `useArmRos.js` (30 Hz / 10 Hz FK) | Single shared ROSLIB subscription; drives 3D URDF joints, `arm_joint_0..5` state & local FK fallback (`/arm_joint_states` is not subscribed directly) |
 | `/smart_telemetry` | `smart_interfaces/msg/SmartTelemetry` | `rosConnection.js` | Populates `fsm_state`, speeds, `dose_rate`, `nav_status` |
 | `/fsm_status` | `std_msgs/msg/String` | `rosConnection.js` | Overrides/updates `telemetry.fsm_state` |
 | `/radiation/status` | `std_msgs/msg/String` (JSON) | `rosConnection.js` | Syncs `{ geiger_active, field_active }` |
@@ -254,8 +259,8 @@ Configured in `src/three/createViewer.js` and orchestrated by `src/components/la
 | `/shadow_marker` | `visualization_msgs/msg/Marker` | `DigitalTwin3D.vue` | Shadow chassis color/alpha/visibility |
 | `/camera/image_raw/compressed` | `sensor_msgs/msg/CompressedImage` | `CameraStream.vue` (lazy) | Base64 JPEG stream (RAW mode) |
 | `/yolo_overlay/compressed` | `sensor_msgs/msg/CompressedImage` | `CameraStream.vue` (lazy) | Base64 JPEG stream (YOLO mode) |
-| `/web_teleop/hub_status` | `std_msgs/msg/String` (JSON) | `ArmControl.vue` | Progress, state, completion for `AUTO` & `GOTO_XYZ` |
-| `/web_teleop/tool_pose` | `geometry_msgs/msg/PoseStamped` | `ArmControl.vue` | 5 Hz TCP pose in `arm_base_link` frame |
+| `/web_teleop/hub_status` | `std_msgs/msg/String` (JSON) | `useArmRos.js` (`ArmAutoTab.vue`) | Progress, state, completion for `AUTO` & `GOTO_XYZ` |
+| `/web_teleop/tool_pose` | `geometry_msgs/msg/PoseStamped` | `useArmRos.js` (`ArmControl.vue`) | 5 Hz TCP pose in `arm_base_link` frame |
 | `/rosout` | `rcl_interfaces/msg/Log` | `rosConnection.js` -> `RosConsole.vue` | Last 50 log entries |
 
 ### ROS 2 Topics & Services Published / Called by Web UI 2.0
@@ -267,13 +272,13 @@ Configured in `src/three/createViewer.js` and orchestrated by `src/components/la
 | `/cmd_vel`, `/cmd_vel_shadow` | `geometry_msgs/msg/Twist` | Publish (10 Hz) | `teleopCore.js` / `AppHeader.vue` |
 | `/cmd_light` | `std_msgs/msg/Bool` | Publish | `QuickActions.vue` |
 | `/goal_pose` | `geometry_msgs/msg/PoseStamped` | Publish | `DigitalTwin3D.vue` (2D Nav Goal click/drag) |
-| `/web_teleop/cmd_vel` | `geometry_msgs/TwistStamped` | Publish (10 Hz) | `ArmControl.vue` (`arm_base_link` / `arm_tool0`) |
-| `/web_teleop/mode` | `std_msgs/String` | Publish | `ArmControl.vue` (`"MANUAL"` / `"AUTO"`) |
-| `/web_teleop/hub_request` | `std_msgs/String` (JSON) | Publish | `ArmControl.vue` (`GOTO_XYZ`, `EXECUTE_CSV`, `RESET`) |
-| `/web_teleop/unfold`, `/web_teleop/fold` | `std_msgs/Empty` | Publish | `ArmControl.vue` |
-| `/arm_controller/joint_trajectory` | `trajectory_msgs/JointTrajectory` | Publish | `ArmControl.vue` (single-point `arm_joint_0..5`) |
+| `/web_teleop/cmd_vel` | `geometry_msgs/TwistStamped` | Publish (10 Hz) | `useArmRos.js` (`ArmServoTab.vue`, `arm_base_link` / `arm_tool0`) |
+| `/web_teleop/mode` | `std_msgs/String` | Publish | `useArmRos.js` (`ArmControl.vue`: `"MANUAL"` / `"AUTO"`) |
+| `/web_teleop/hub_request` | `std_msgs/String` (JSON) | Publish | `useArmRos.js` (`ArmAutoTab.vue`: `GOTO_XYZ`, `EXECUTE_CSV`, `RESET`) |
+| `/web_teleop/unfold`, `/web_teleop/fold` | `std_msgs/Empty` | Publish | `useArmRos.js` (`ArmControl.vue`) |
+| `/arm_controller/joint_trajectory` | `trajectory_msgs/JointTrajectory` | Publish | `useArmRos.js` (`ArmControl` / `ArmJoints` / `ArmManual` / `ArmRouteSequencer`: single-point `arm_joint_0..5` and `arm_clamp`) |
 
-> **Type Name Note:** `rosConnection.js` and 3D composables use ROS 2 Jazzy interface strings with `/msg/` (e.g. `geometry_msgs/msg/Twist`), while `ArmControl.vue` uses `sensor_msgs/JointState`, `trajectory_msgs/JointTrajectory`, `geometry_msgs/TwistStamped`, `std_msgs/String`, `std_msgs/Empty`; `rosbridge_suite` resolves both forms on ROS 2.
+> **Type Name Note:** `rosConnection.js`, 3D composables, and `/web_teleop/tool_pose` use ROS 2 Jazzy interface strings with `/msg/` (e.g. `geometry_msgs/msg/Twist`, `sensor_msgs/msg/JointState`, `geometry_msgs/msg/PoseStamped`), while the other manipulator topics in `useArmRos.js` use short names (`trajectory_msgs/JointTrajectory`, `geometry_msgs/TwistStamped`, `std_msgs/String`, `std_msgs/Empty`); `rosbridge_suite` resolves both forms on ROS 2.
 
 ### `/smart_command` Matrix
 
@@ -285,7 +290,7 @@ Configured in `src/three/createViewer.js` and orchestrated by `src/components/la
 | `system` | `watchdog_on`, `watchdog_off` | `""` | `TeleopTabs.vue` |
 | `system` | `rad_on`, `rad_off`, `rad_geiger_on`, `rad_geiger_off`, `rad_record:<file>`, `rad_stop`, `rad_save`, `rad_clear`, `rad_load:<file>` | `""` | `TeleopTabs.vue` |
 | `system` | `shadow_on`, `shadow_off` | `""` | `TeleopTabs.vue` |
-| `system` | `arm_on`, `arm_off` | `""` | `ArmControl.vue` |
+| `system` | `arm_moveit_on`, `arm_moveit_off`, `arm_servo_on`, `arm_servo_off` | `""` | `ArmAutoTab.vue`, `ArmServoTab.vue` |
 | `nav` | `go_to_named` | `{"name":"...","laps":N}` | `QuickActions.vue`, `NavPopup.vue` |
 | `nav` | `cancel` | `{"x":0,"y":0,"yaw":0}` | `AppHeader.vue`, `NavPopup.vue` |
 | `nav` | `resume`, `recover_localization` | `""` | `QuickActions.vue`, `NavPopup.vue`, `TeleopTabs.vue` |
@@ -328,9 +333,9 @@ State persisted client-side is scoped by browser **origin** (`scheme + host + po
 | Key | Written By | Payload / Purpose |
 |---|---|---|
 | `theme` | `AppHeader.vue` | `'dark'` or `'light'` CAD theme preference |
-| `arm_saved_poses` | `ArmControl.vue` | Array of named 6-DOF poses `[{ name, deg: [j0..j5] }]` |
-| `arm_active_route` | `ArmControl.vue` | Active `JOINT ROUTE SEQUENCER` step list `[{ id, name, deg, duration, pause }]` |
-| `arm_saved_routes` | `ArmControl.vue` | Array of named joint routes `[{ name, steps }]` |
+| `arm_saved_poses` | `ArmJointsTab.vue` | Array of named 6-DOF poses `[{ name, deg: [j0..j5] }]` |
+| `arm_active_route` | `ArmRouteSequencer.vue` | Active `JOINT ROUTE SEQUENCER` step list `[{ id, name, deg, duration, pause }]` |
+| `arm_saved_routes` | `ArmRouteSequencer.vue` | Array of named joint routes `[{ name, steps }]` |
 
 ---
 
@@ -371,12 +376,12 @@ npm run build
 
 | Area | Location in Codebase | Technical Impact |
 |---|---|---|
-| **Hardcoded CSV Mission Paths** | `ArmControl.vue` (`selectedHubTask`, `<select>` options, `SQUARE_HORIZONTAL_POINTS`, `SQUARE_VERTICAL_POINTS`) | References `/home/oleksandr/ros2_ws/src/manipulator_stack/manipulator_control/manipulator_control/test/square_*.csv` and duplicates preview points in JS; breaks if workspace path or username differs. |
+| **Hardcoded CSV Mission Paths** | `ArmAutoTab.vue` (`selectedHubTask`, `<select>` options, `SQUARE_HORIZONTAL_POINTS`, `SQUARE_VERTICAL_POINTS`) | References `/home/oleksandr/ros2_ws/src/manipulator_stack/manipulator_control/manipulator_control/test/square_*.csv` and duplicates preview points in JS; breaks if workspace path or username differs. |
 | **Hardcoded `:8080` Asset Origin** | `robotModel.js`, `DigitalTwin3D.vue`, `useSdfWorlds.js` | Constructs `http://${window.location.hostname}:8080/...` directly. Fails when served behind a TLS/non-8080 reverse proxy or via `:5173` without a `:8080` backend (`vite.config.js` lacks `server.proxy`). |
 | **Hardcoded Shadow STL & SDF World List** | `DigitalTwin3D.vue` (`base.STL`, initial `loadSDFWorld('213')`, dropdown list), `useSdfWorlds.js` | Assumes `ugv_tracked_description/meshes/base.STL` exists and SDF worlds + STL meshes reside strictly under `smart_sim2real`. |
-| **Hardcoded 6-DOF Joint Names & Limits** | `ArmControl.vue` (`jointLimits`, `arm_joint_0..5`) | UI slider ranges (`[-90,90]`, `[-5,180]`, `[-180,5]`, etc.) are not parsed dynamically from `robot_description` or MoveIt `joint_limits.yaml`. |
+| **Hardcoded 6-DOF Joint Names & Limits** | `useArmRos.js` (`ARM_JOINT_NAMES`, `ARM_JOINT_LIMITS`), `armKinematics.js` (`ARM_JOINT_LIMITS_RAD`, link lengths, `CLAMP_*_RAD`) | UI slider ranges (`[-90,90]`, `[-5,180]`, `[-180,5]`, etc.), gripper range (`[-0.5,0.5]`), and 2D/FK link dimensions are not parsed dynamically from `robot_description` or MoveIt `joint_limits.yaml`. |
 | **Assumed `map` Fixed Frame** | `DigitalTwin3D.vue` (`SimpleTFClient({ fixedFrame: 'map' })`) | Running manipulator-only setups without SLAM/odom broadcasting `map -> ... -> rootLink` leaves `computeTransform(rootLink)` returning `null`; robot stays at `(0,0,0)`. |
-| **Mixed Topic/Thread Handling in Bridge** | `smart_plugins/src/trajectory_bridge.cpp` (duplicated in `manipulator_control`) | Multi-point `JointTrajectory` messages on `/arm_controller/joint_trajectory` spawn detached non-cancelable `sleep_for` threads (worked around cleanly by `JOINTS` sending single-point trajectories; also duplicate bridge sources exist across two packages). |
-| **Origin-Bound Persistence** | `ArmControl.vue`, `AppHeader.vue` | Saved arm poses, routes, and theme are stored in browser `localStorage` and do not sync across devices or different hosts/ports. |
+| **Mixed Topic/Thread Handling in Bridge** | `smart_plugins/src/trajectory_bridge.cpp` (duplicated in `manipulator_control`) | Multi-point `JointTrajectory` messages on `/arm_controller/joint_trajectory` spawn detached non-cancelable `sleep_for` threads (worked around cleanly by `JOINTS`/`MANUAL`/`ArmRouteSequencer` sending single-point trajectories; also duplicate bridge sources exist across two packages). |
+| **Origin-Bound Persistence** | `ArmJointsTab.vue`, `ArmRouteSequencer.vue`, `AppHeader.vue` | Saved arm poses, routes, and theme are stored in browser `localStorage` and do not sync across devices or different hosts/ports. |
 | **Single Large JS Bundle Chunk** | `vite.config.js` / `npm run build` | `three`, `roslib`, and `urdf-loader` are bundled into a single chunk without `build.rollupOptions.output.manualChunks` code splitting. |
-| **Unused Legacy Files** | `src/components/mechanisms/MechanismsPanel.vue`, `fix-web-ui-haze.patch` | Unimported WIP component and pre-Three.js `ros3d` patch still sit in the repository tree. |
+| **Unused Legacy Component** | `src/components/mechanisms/MechanismsPanel.vue` | Unimported WIP placeholder component for `/cmd_light` still sits in the repository tree (legacy `fix-web-ui-haze.patch` has been removed). |

@@ -243,12 +243,13 @@ const loadSelectedRadMap = () => {
   }
 }
 
-const isShadowMode = ref(false)
+const isShadowMode = computed(() => store.driveTarget === 'shadow')
 
 const toggleShadowMode = () => {
-  isShadowMode.value = !isShadowMode.value
+  const nextTarget = isShadowMode.value ? 'base' : 'shadow'
+  store.setDriveTarget(nextTarget)
   if (activeTab.value === 'base') {
-    store.setActiveRobotType(isShadowMode.value ? 'shadow' : 'base')
+    store.setActiveRobotType(nextTarget)
   }
 }
 
@@ -257,7 +258,7 @@ const setTab = (tab) => {
   stopTeleopLoop() // Reset movement when changing tabs
   
   if (tab === 'base') {
-    store.setActiveRobotType(isShadowMode.value ? 'shadow' : 'base')
+    store.setActiveRobotType(store.driveTarget)
   } else {
     store.setActiveRobotType(null)
   }
@@ -267,7 +268,9 @@ const pubSys = (cmd) => pubSmartCommand('system', cmd)
 const pubOperator = (cmd) => pubSmartCommand('operator', cmd)
 
 const stopBase = () => {
+  stopTeleopLoop()
   pubTwist('base', 0, 0)
+  pubTwist('shadow', 0, 0)
 }
 </script>
 

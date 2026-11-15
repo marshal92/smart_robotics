@@ -27,8 +27,8 @@ export class SimpleTFClient {
     this._isDisposed = false
     
     this._needsUpdate = false
+    this._rafId = null
     this._updateLoop = this._updateLoop.bind(this)
-    requestAnimationFrame(this._updateLoop)
     
     // Subscribe to /tf without artificial throttling for maximum smoothness
     this.tfSub = new ROSLIB.Topic({
@@ -58,20 +58,27 @@ export class SimpleTFClient {
       }
     })
     this._needsUpdate = true
+    if (!this._isDisposed && this._rafId === null) {
+      this._rafId = requestAnimationFrame(this._updateLoop)
+    }
   }
 
   _updateLoop() {
+    this._rafId = null
     if (this._isDisposed) return
     
     if (this._needsUpdate) {
-      this.notifyCallbacks()
       this._needsUpdate = false
+      this.notifyCallbacks()
     }
-    requestAnimationFrame(this._updateLoop)
   }
 
   dispose() {
     this._isDisposed = true
+    if (this._rafId !== null) {
+      cancelAnimationFrame(this._rafId)
+      this._rafId = null
+    }
     if (this.tfSub) {
       this.tfSub.unsubscribe()
       this.tfSub = null

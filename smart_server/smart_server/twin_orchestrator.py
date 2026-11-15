@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
+import os
+import shlex
 import subprocess
 import threading
 import time
+
+DEFAULT_CYCLONEDDS_URI = (
+    "<CycloneDDS><Domain><Discovery>"
+    "<ParticipantIndex>auto</ParticipantIndex>"
+    "<MaxAutoParticipantIndex>500</MaxAutoParticipantIndex>"
+    "</Discovery></Domain></CycloneDDS>"
+)
 
 import rclpy
 from rclpy.node import Node
@@ -55,13 +64,23 @@ class TwinOrchestrator(Node):
                 return
 
             sim_str = "true" if self.worker_use_sim_time else "false"
-            cmd = (
-                f"source /opt/ros/jazzy/setup.bash && "
-                f"source ~/ros2_ws/install/setup.bash && "
-                f"ros2 launch smart_server {launch_file} use_sim_time:={sim_str}"
-            )
+            cyclone_uri = os.environ.get("CYCLONEDDS_URI", "").strip()
+            if not cyclone_uri:
+                home_xml = os.path.expanduser("~/cyclonedds.xml")
+                cyclone_uri = f"file://{home_xml}" if os.path.isfile(home_xml) else DEFAULT_CYCLONEDDS_URI
+
+            parts = ["source /opt/ros/jazzy/setup.bash"]
+            ws_setup = os.path.expanduser("~/ros2_ws/install/setup.bash")
+            if os.path.isfile(ws_setup):
+                parts.append(f"source {shlex.quote(ws_setup)}")
+            parts.extend([
+                "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp",
+                f"export CYCLONEDDS_URI={shlex.quote(cyclone_uri)}",
+                f"exec ros2 launch smart_server {launch_file} use_sim_time:={sim_str}",
+            ])
+            inner = " && ".join(parts)
             subprocess.Popen(
-                ['tmux', 'new-session', '-d', '-s', session_name, f"bash -c '{cmd}'"],
+                ['tmux', 'new-session', '-d', '-s', session_name, f"bash -c {shlex.quote(inner)}"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL
             )
             self.get_logger().info(

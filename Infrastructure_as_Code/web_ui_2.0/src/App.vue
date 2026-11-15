@@ -97,6 +97,7 @@ import TeleopTabs from './components/teleop/TeleopTabs.vue'
 import QuickActions from './components/teleop/QuickActions.vue'
 import MissionManager from './components/mission/MissionManager.vue'
 import RosConsole from './components/console/RosConsole.vue'
+import { disposeGamepadService, initGamepadService } from './services/gamepadService'
 
 const store = useRosStore()
 const isBottomCollapsed = ref(false)
@@ -127,10 +128,12 @@ const selectDockTab = (tab) => {
 
 onMounted(() => {
   window.addEventListener('resize', handleWindowResize)
+  initGamepadService()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleWindowResize)
+  disposeGamepadService()
 })
 </script>
 

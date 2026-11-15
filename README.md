@@ -53,7 +53,7 @@ The system integrates **Nav2 (MPPI + Lifelong SLAM)**, the **ALARA** radiation-a
 | [`smart_master`](smart_master/CMakeLists.txt) | `ament_cmake` | Top-level URDF assembly [`full_system.urdf.xacro`](smart_master/urdf/full_system.urdf.xacro) and master launches [`sim_master.launch.py`](smart_master/launch/sim_master.launch.py), [`real_master.launch.py`](smart_master/launch/real_master.launch.py) |
 | [`smart_control`](smart_control/setup.py) | `ament_python` | Mission lifecycle, waypoint storage, safety watchdog, relocalization, and tactical maneuvers ([`control_core.launch.py`](smart_control/launch/control_core.launch.py)) |
 | [`smart_plugins`](smart_plugins/CMakeLists.txt) | `ament_cmake` (C++) | Real-time C++ core nodes: `nav_coordinator`, `telemetry_mux`, `trajectory_bridge`, `stabilized_frame_publisher_node` |
-| [`smart_nav`](smart_nav/CMakeLists.txt) | `ament_cmake` | Nav2 (MPPI + `RadiationLayer`) and SLAM Toolbox configs ([`nav2_params.yaml`](smart_nav/config/nav2_params.yaml)), mapping/lifelong launches, and `maps/` |
+| [`smart_nav`](smart_nav/CMakeLists.txt) | `ament_cmake` | Nav2 (MPPI + `RadiationLayer`) and SLAM Toolbox configs ([`nav2_params.yaml`](smart_nav/config/nav2_params.yaml)), field notes ([`README_NAV.md`](smart_nav/README_NAV.md)), mapping/lifelong launches, and `maps/` |
 | [`smart_radiation`](smart_radiation/setup.py) | `ament_python` | Radiation lifecycle (`radiation_manager`), sigmoid field server (`radiation_field_server`), AccuRad serial driver (`accurad_serial_node`), map generators/viewers, and experiment logger |
 | [`smart_radiation_plugins`](smart_radiation_plugins/CMakeLists.txt) | `ament_cmake` (C++) | Nav2 costmap plugin `smart_radiation_plugins::RadiationLayer` plus C++ nodes `radiation_mapper_node`, `virtual_geiger_node`, `alara_speed_reflex_node` |
 | [`smart_server`](smart_server/setup.py) | `ament_python` | Cloud infrastructure: `web_server`, `rosbridge_websocket`, `twin_orchestrator`, `map_to_image`, `shadow_teleop_*`, `sdf_visualizer`, `heartbeat_pub`; on-demand manipulator launches |
@@ -61,7 +61,7 @@ The system integrates **Nav2 (MPPI + Lifelong SLAM)**, the **ALARA** radiation-a
 | [`smart_moveit_config`](smart_moveit_config/package.xml) | `ament_cmake` | MoveIt 2 and MoveIt Servo configuration (`SRDF`, kinematics, controllers, `servo_config.yaml`) used by `arm_moveit.launch.py` and `arm_servo.launch.py` |
 | [`smart_ai`](smart_ai/setup.py) | `ament_python` | Voice control (`voice_listener_node` / Faster-Whisper), LLM/RegEx dispatcher (`semantic_dispatcher_node`), YOLO detection (`yolo_publisher`), and Visual Servoing (`spatial_projector_node`) |
 | [`smart_sandbox`](smart_sandbox/setup.py) | `ament_python` | Experimental evaluation loggers and MPPI / trajectory analysis scripts |
-| [`Infrastructure_as_Code`](Infrastructure_as_Code/COLCON_IGNORE) | Non-ROS dir (`COLCON_IGNORE`) | PyQt6 launcher `smart_launcher.py`, tmux autostart scripts, CycloneDDS configs, 4WD Xacro configs, and [`web_ui_2.0`](Infrastructure_as_Code/web_ui_2.0/README.md) frontend |
+| [`Infrastructure_as_Code`](Infrastructure_as_Code/COLCON_IGNORE) | Non-ROS dir (`COLCON_IGNORE`) | PyQt6 launcher `smart_launcher.py`, tmux autostart scripts, CycloneDDS configs, 4WD Xacro configs, and [`web_ui_2.0`](Infrastructure_as_Code/web_ui_2.0/README_WEB.md) frontend |
 
 ---
 
@@ -179,9 +179,9 @@ Control of the 6-DOF manipulator (`arm_joint_0..arm_joint_5`, gripper `arm_clamp
   * `system:arm_moveit_on` / `arm_moveit_off` -> [`arm_moveit.launch.py`](smart_server/launch/arm_moveit.launch.py) (`move_group`, `tactical_server`, `control_hub` in `arm_moveit_session`).
   * `system:arm_servo_on` / `arm_servo_off` -> [`arm_servo.launch.py`](smart_server/launch/arm_servo.launch.py) (`moveit_servo` with `is_primary_planning_scene_monitor=true` + `teleop_manager` in `arm_servo_session`).
   * `system:arm_off` -> stops both manipulator backends.
-* **Four Modes in Web UI 2.0 (`ArmControl.vue`):**
-  1. **JOINTS:** direct joint sliders `J0..J5` + clamp, `Fold`/`Unfold` presets, `LIVE FK` 3D trail, and trajectory sequencer to `/arm_controller/joint_trajectory`.
-  2. **MANUAL:** browser-side cylindrical **2.5D control** (zero server MoveIt nodes needed) — damped least-squares 2D Jacobian over radius $R$ and height $Z$ on $J1/J2$, automatic wrist leveling on $J4$, roll compensation on $J5$, and local FK.
+* **Four Modes in Web UI 2.0 ([`ArmControl.vue`](Infrastructure_as_Code/web_ui_2.0/src/components/teleop/ArmControl.vue) with vertical folder sub-tabs & top `Unfold`/`Fold`/`TRAIL`/`CLEAR` bar):**
+  1. **JOINTS:** direct joint sliders `J0..J5` with `±5°` steppers and saved pose presets (`SYNC`/`SAVE`/`RUN`).
+  2. **MANUAL:** browser-side cylindrical **2.5D control** (zero server MoveIt nodes needed) — side-by-side **Boom** (`R`/`BASE`/`Z`) and **Wrist** (`PITCH`/`WRIST`/`ROLL`) D-Pads with damped least-squares 2D Jacobian on `J1`/`J2`, auto-level wrist on `J4`, roll compensation on `J5`, compact `GRIP` (`arm_clamp` -> `/arm_controller/joint_trajectory`), local `LIVE FK` telemetry, and the **Joint Route Sequencer** (`+ ROBOT` single-snapshot builder).
   3. **AUTO:** `Control Hub` missions, CSV sequence execution, and `GOTO_XYZ` planning (requires `MoveIt ON`).
   4. **SERVO:** real-time Cartesian/angular streaming teleoperation via `MoveIt Servo` (requires `Servo ON`).
 
@@ -189,12 +189,12 @@ Control of the 6-DOF manipulator (`arm_joint_0..arm_joint_5`, gripper `arm_clamp
 
 ## 8. Web UI 2.0 and 3D Digital Twin
 
-The frontend lives in [`Infrastructure_as_Code/web_ui_2.0`](Infrastructure_as_Code/web_ui_2.0/README.md) (see its local README for full technical details):
+The frontend lives in [`Infrastructure_as_Code/web_ui_2.0`](Infrastructure_as_Code/web_ui_2.0/README_WEB.md) (see its local reference [`README_WEB.md`](Infrastructure_as_Code/web_ui_2.0/README_WEB.md) for full technical details):
 
 * **HTTP Server (`smart_server/web_server.py`):** Multi-threaded `_ThreadingWebServer` (port `8080`, in-memory gzip & cache headers) serving `web_ui_2.0/dist` and workspace ROS assets at `/packages/<pkg>/`, `/install/`, and `/src/`.
 * **Map Transport:** [`map_to_image.py`](smart_server/smart_server/map_to_image.py) and `radiation_field_server.py` stream maps over `/map_image/compressed` and `/radiation_image/compressed` as PNGs with atomic geometry metadata packed in `header.frame_id` (`map|res|ox|oy|oz|qx|qy|qz|qw`).
 * **3D Engine (`Three.js` + `urdf-loader` + `SimpleTFClient`):**
-  * Client-side TF2 resolver without `ros3djs` or `tf2_web_republisher`.
+  * Client-side TF2 resolver without `ros3djs` or `tf2_web_republisher`, paired with on-demand Three.js rendering (`requestRender()`), lazy radiation texture decoding, and a single shared `/joint_states` subscription bus in `rosConnection.js`.
   * Renders robot URDF, 2D occupancy map, semi-transparent radiation layer, SDF environment STL meshes (`sdf_visualizer`), `/plan` paths, `/smart_waypoints_markers`, Shadow twin, and 3D end-effector trail.
   * Drag-oriented **Nav Goal** (right-click / touch), **Center & Follow** camera mode, and an optional on-screen **Touch Joystick** for tablets/mobile browsers.
 
@@ -251,6 +251,7 @@ Message definitions: `smart_interfaces/msg/SmartCommand` (`target_system`, `comm
 
 ## Additional Documentation
 
-* Frontend Technical Reference: [`Infrastructure_as_Code/web_ui_2.0/README.md`](Infrastructure_as_Code/web_ui_2.0/README.md)
-* Codebase Changelog: [`Infrastructure_as_Code/CHANGELOG.md`](Infrastructure_as_Code/CHANGELOG.md)
+* Navigation Field Notes & Tuning Lessons: [`smart_nav/README_NAV.md`](smart_nav/README_NAV.md)
+* Frontend Technical Reference: [`Infrastructure_as_Code/web_ui_2.0/README_WEB.md`](Infrastructure_as_Code/web_ui_2.0/README_WEB.md)
+* Infrastructure & Hardcode Audit: [`Infrastructure_as_Code/HARDCODE_AUDIT.md`](Infrastructure_as_Code/HARDCODE_AUDIT.md)
 * License: [`LICENSE`](LICENSE)

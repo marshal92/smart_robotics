@@ -4,6 +4,16 @@ SESSION="smart_server"
 IP_ROBOTA="192.168.31.100"
 USE_ARM=${1:-false}
 
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+if [ -z "${CYCLONEDDS_URI:-}" ]; then
+    if [ -f "$HOME/cyclonedds.xml" ]; then
+        export CYCLONEDDS_URI="file://$HOME/cyclonedds.xml"
+    else
+        export CYCLONEDDS_URI="<CycloneDDS><Domain><Discovery><ParticipantIndex>auto</ParticipantIndex><MaxAutoParticipantIndex>500</MaxAutoParticipantIndex></Discovery></Domain></CycloneDDS>"
+    fi
+fi
+printf -v CYCLONE_ESCAPED '%q' "$CYCLONEDDS_URI"
+
 tmux kill-session -t $SESSION 2>/dev/null
 tmux new-session -d -s $SESSION
 
@@ -40,13 +50,13 @@ ZENOH_CMD="zenoh-bridge-dds -e tcp/$IP_ROBOTA:7447 --no-multicast-scouting \
 
 # Window 0: Zenoh Bridge (Connection to robot)
 tmux rename-window -t $SESSION:0 'Zenoh_Client'
-tmux send-keys -t $SESSION:0 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' C-m
+tmux send-keys -t $SESSION:0 "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI=$CYCLONE_ESCAPED" C-m
 tmux send-keys -t $SESSION:0 "$ZENOH_CMD" C-m
 
 # Window 2: Local server nodes (Orchestrator, Shadow, Web UI, etc.)
 tmux new-window -t $SESSION:2 -n 'Master_Launch'
 tmux send-keys -t $SESSION:2 'source /opt/ros/jazzy/setup.bash && source ~/ros2_ws/install/setup.bash' C-m
-tmux send-keys -t $SESSION:2 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' C-m
+tmux send-keys -t $SESSION:2 "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI=$CYCLONE_ESCAPED" C-m
 tmux send-keys -t $SESSION:2 'sleep 2' C-m
 tmux send-keys -t $SESSION:2 "ros2 launch smart_server server.launch.py use_arm:=$USE_ARM" C-m
 

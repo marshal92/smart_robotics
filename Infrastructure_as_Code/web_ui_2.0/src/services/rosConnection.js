@@ -7,6 +7,62 @@ let cmdVelTopic = null
 let cmdShadowTopic = null
 let cmdLightTopic = null
 let camSub = null
+let jointStateSub = null
+let jointStateBusRos = null
+const jointStateListeners = new Set()
+
+function resetJointStateBus() {
+  if (jointStateSub) {
+    try {
+      jointStateSub.unsubscribe()
+    } catch {
+      // Ignore unsubscribe errors on closed sockets
+    }
+    jointStateSub = null
+  }
+  jointStateBusRos = null
+  jointStateListeners.clear()
+}
+
+export function subscribeJointStates(rosInstance, callback) {
+  if (!rosInstance || typeof callback !== 'function') {
+    return () => {}
+  }
+
+  if (jointStateBusRos && jointStateBusRos !== rosInstance) {
+    resetJointStateBus()
+  }
+
+  jointStateBusRos = rosInstance
+  const entry = { callback }
+  jointStateListeners.add(entry)
+
+  if (!jointStateSub) {
+    jointStateSub = new ROSLIB.Topic({
+      ros: rosInstance,
+      name: '/joint_states',
+      messageType: 'sensor_msgs/msg/JointState'
+    })
+    jointStateSub.subscribe((msg) => {
+      for (const listener of Array.from(jointStateListeners)) {
+        listener.callback(msg)
+      }
+    })
+  }
+
+  return () => {
+    jointStateListeners.delete(entry)
+    if (jointStateBusRos === rosInstance && jointStateListeners.size === 0 && jointStateSub) {
+      try {
+        jointStateSub.unsubscribe()
+      } catch {
+        // Ignore unsubscribe errors on closed sockets
+      }
+      jointStateSub = null
+      jointStateBusRos = null
+    }
+  }
+}
 
 export function getRosInstance() {
   return ros
@@ -45,6 +101,7 @@ let lastWpJson = ''
 export function connectROS(url) {
   const store = useRosStore()
   
+  resetJointStateBus()
   if (ros) ros.close()
   ros = new ROSLIB.Ros({ url: url })
 

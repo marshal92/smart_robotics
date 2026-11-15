@@ -24,7 +24,7 @@ export function setTeleopSpeed(speed) {
 
 function publishCurrentTwist() {
   const store = useRosStore()
-  const activeRobotType = store.activeRobotType
+  const activeRobotType = store.activeRobotType || store.driveTarget
   if (!activeRobotType || !store.isConnected) return
 
   let linear = 0.0
@@ -43,10 +43,12 @@ function publishCurrentTwist() {
   pubTwist(activeRobotType, linear, angular)
 }
 
-export function setAnalogTeleop(linearNorm, angularNorm) {
+export function setAnalogTeleop(linearNorm, angularNorm, targetType = null) {
   const store = useRosStore()
-  if (!store.activeRobotType) {
-    store.setActiveRobotType('base')
+  if (targetType === 'base' || targetType === 'shadow') {
+    store.setActiveRobotType(targetType)
+  } else if (!store.activeRobotType) {
+    store.setActiveRobotType(store.driveTarget || 'base')
   }
 
   analogState.linear = clamp(Number(linearNorm) || 0, -1, 1)
@@ -86,7 +88,8 @@ export function stopTeleopLoop() {
   analogState.angular = 0
 
   const store = useRosStore()
-  if (store.activeRobotType) {
-    pubTwist(store.activeRobotType, 0, 0)
+  const target = store.activeRobotType || store.driveTarget
+  if (target) {
+    pubTwist(target, 0, 0)
   }
 }

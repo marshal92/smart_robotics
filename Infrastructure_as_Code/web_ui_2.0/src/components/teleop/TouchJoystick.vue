@@ -73,7 +73,7 @@ const normAngular = ref(0)
 
 let activePointerId = null
 
-const isShadow = computed(() => store.activeRobotType === 'shadow')
+const isShadow = computed(() => store.driveTarget === 'shadow')
 const liveLinear = computed(() => normLinear.value * teleopSpeed.value)
 const liveAngular = computed(() => normAngular.value * teleopSpeed.value)
 

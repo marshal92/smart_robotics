@@ -9,6 +9,18 @@
     <span>NAV: <b>{{ store.telemetry.nav_status }}</b></span>
     <span class="sep">|</span>
     <span class="light-indicator">LIGHT <b class="light-icon" :class="{ 'is-on': store.lightOn }">💡</b></span>
+    <template v-if="store.gamepadConnected">
+      <span class="sep">|</span>
+      <button
+        type="button"
+        class="gp-hud-pill"
+        :class="`mode-${store.gamepadMode}`"
+        @click="cycleGamepadMode"
+        :title="`${store.gamepadName || 'Xbox Controller'} — Click to switch DRIVE / ARM`"
+      >
+        {{ gpLabel }}
+      </button>
+    </template>
   </div>
 </template>
 
@@ -17,6 +29,17 @@ import { computed } from 'vue'
 import { useRosStore } from '../../stores/rosStore'
 
 const store = useRosStore()
+
+const gpLabel = computed(() => {
+  if (store.gamepadMode === 'arm') return 'PAD:ARM'
+  if (store.gamepadMode === 'off') return 'PAD:OFF'
+  return store.driveTarget === 'shadow' ? 'PAD:SHD' : 'PAD:DRV'
+})
+
+const cycleGamepadMode = () => {
+  const next = store.gamepadMode === 'drive' ? 'arm' : 'drive'
+  store.setGamepadMode(next)
+}
 
 const displaySpeed = computed(() => {
   const v = Number(store.telemetry.linear_speed) || 0
@@ -79,6 +102,34 @@ const fsmColor = computed(() => {
 
 .light-icon.is-on {
   filter: grayscale(0%) brightness(1.3);
+}
+
+.gp-hud-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  background: var(--bg-item);
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.3;
+}
+
+.gp-hud-pill.mode-drive {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.gp-hud-pill.mode-arm {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gp-hud-pill.mode-off {
+  color: var(--muted);
+  opacity: 0.75;
 }
 
 @media (max-width: 900px) {

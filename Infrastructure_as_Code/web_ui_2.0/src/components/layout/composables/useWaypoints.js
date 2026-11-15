@@ -118,6 +118,7 @@ export function useWaypoints(viewerRef) {
           delete waypointMeshes[existingKey]
         }
       }
+      viewer.requestRender?.()
     })
   }
 
@@ -126,6 +127,7 @@ export function useWaypoints(viewerRef) {
     for (let key in waypointMeshes) {
       waypointMeshes[key].visible = showWaypoints.value
     }
+    viewerRef.value?.requestRender?.()
   }
 
   function disposeWaypoints() {
@@ -151,6 +153,7 @@ export function useWaypoints(viewerRef) {
     for (const key in waypointMeshes) {
       delete waypointMeshes[key]
     }
+    viewerRef.value?.requestRender?.()
   }
 
   return {

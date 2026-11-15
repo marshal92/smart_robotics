@@ -111,6 +111,7 @@ export function useMapLayer(viewerRef) {
         mapResolution = meta.resolution
         mapOrigin = meta.origin
         mapOrientation = meta.orientation
+        viewerRef.value?.requestRender?.()
       }
     })
   }
@@ -142,6 +143,7 @@ export function useMapLayer(viewerRef) {
         mapPlane.material.dispose()
       }
       mapPlane = null
+      viewerRef.value.requestRender?.()
     }
   }
 
