@@ -254,4 +254,5 @@ Message definitions: `smart_interfaces/msg/SmartCommand` (`target_system`, `comm
 * Navigation Field Notes & Tuning Lessons: [`smart_nav/README_NAV.md`](smart_nav/README_NAV.md)
 * Frontend Technical Reference: [`Infrastructure_as_Code/web_ui_2.0/README_WEB.md`](Infrastructure_as_Code/web_ui_2.0/README_WEB.md)
 * Infrastructure & Hardcode Audit: [`Infrastructure_as_Code/HARDCODE_AUDIT.md`](Infrastructure_as_Code/HARDCODE_AUDIT.md)
+* Performance & Optimization Audit: [`Infrastructure_as_Code/OPTIMIZATION_AUDIT.md`](Infrastructure_as_Code/OPTIMIZATION_AUDIT.md)
 * License: [`LICENSE`](LICENSE)

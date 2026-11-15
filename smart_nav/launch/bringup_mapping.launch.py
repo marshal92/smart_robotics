@@ -7,10 +7,12 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     pkg_smart_nav = FindPackageShare('smart_nav')
-    pkg_nav2_bringup = FindPackageShare('nav2_bringup')
 
     map_name_arg = DeclareLaunchArgument('map_name', default_value='none')
     use_sim_time_arg = DeclareLaunchArgument('use_sim_time', default_value='true')
+    use_composition_arg = DeclareLaunchArgument('use_composition', default_value='True')
+    use_docking_arg = DeclareLaunchArgument('use_docking', default_value='False')
+    use_route_arg = DeclareLaunchArgument('use_route', default_value='False')
     use_sim_time = LaunchConfiguration('use_sim_time')
 
     slam_mapping_launch = IncludeLaunchDescription(
@@ -22,18 +24,24 @@ def generate_launch_description():
     )
 
     nav2_config_path = PathJoinSubstitution([pkg_smart_nav, 'config', 'nav2_params.yaml'])
-    
+
     nav2_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(PathJoinSubstitution([pkg_nav2_bringup, 'launch', 'navigation_launch.py'])),
+        PythonLaunchDescriptionSource(PathJoinSubstitution([pkg_smart_nav, 'launch', 'navigation_launch.py'])),
         launch_arguments={
             'use_sim_time': use_sim_time,
-            'params_file': nav2_config_path
+            'params_file': nav2_config_path,
+            'use_composition': LaunchConfiguration('use_composition'),
+            'use_docking': LaunchConfiguration('use_docking'),
+            'use_route': LaunchConfiguration('use_route'),
         }.items()
     )
 
     return LaunchDescription([
         map_name_arg,
         use_sim_time_arg,
+        use_composition_arg,
+        use_docking_arg,
+        use_route_arg,
         slam_mapping_launch,
         TimerAction(period=3.0, actions=[nav2_launch])
     ])

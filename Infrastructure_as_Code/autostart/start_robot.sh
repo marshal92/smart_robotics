@@ -49,7 +49,7 @@ tmux new-session -d -s $SESSION
 tmux rename-window -t $SESSION:0 'MicroROS'
 tmux send-keys -t $SESSION:0 "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI=$CYCLONE_ESCAPED" C-m
 tmux send-keys -t $SESSION:0 'stty -F /dev/esp32s3 -hupcl' C-m
-tmux send-keys -t $SESSION:0 'while true; do ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/esp32s3 -v4; sleep 2; done' C-m
+tmux send-keys -t $SESSION:0 'while true; do ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/esp32s3; sleep 2; done' C-m
 
 # Window 1: Hardware and Control Infrastructure
 tmux new-window -t $SESSION:1 -n 'Hardware'
