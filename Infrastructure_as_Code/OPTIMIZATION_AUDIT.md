@@ -53,12 +53,37 @@ This document records baseline hardware profiling from **Raspberry Pi 5** (captu
 
 ---
 
+### 1.1 Post-Change Verification on Raspberry Pi 5 (Commit `fdd168e`)
+
+Measured after deploying `use_composition:=true`, `use_docking:=false`, `use_route:=false`, and removing `micro_ros_agent -v4`:
+
+| Metric / Process | Baseline (Before) | Without `radiation_session` | Apples-to-Apples **With `radiation_session`** |
+| :--- | :---: | :---: | :---: |
+| **`top` Idle / System %** | ~`52% id` (`sy 18–22%`) | **`75.3% id` (`sy 8.5–11%`)** | **`76.4% id` (`13.8 us, 8.7 sy`)** |
+| **Load average** | `7.59–23.00` | `5.86` *(5 min post-boot)* | `5.05–5.31` *(13 min uptime, post-restart)* |
+| **Runqueue (`vmstat r`)** | `1, 23, 26, 69` | **`0–1`** | **`0–1`** |
+| **Context switches (`vmstat cs`)** | `36,394–39,944 /s` | **`16,179–17,732 /s`** | **`18,173–22,079 /s`** (**~2× lower**) |
+| **Interrupts (`vmstat in`)** | `13,941–14,109 /s` | `10,339–11,019 /s` | `10,763–11,262 /s` |
+| **Nav2** | ~`90–95%` of 1 core (11 procs) | **`29.4%` (`86.8 MB` RSS)** in 1 container | **`26.5%` (`95.0 MB` RSS)** in 1 container |
+| **`/bond` rate** | `198.94 Hz` (inter-process UDP) | **`160.05 Hz`** (in-container) | `~160 Hz` *(8 active servers; not re-sampled after rad start)* |
+| **`micro_ros_agent`** | `7.8–17.9%` (`53.9 MB`) | **`6.9%` (`48.1 MB`)** | **`5.9%` (`50.0 MB`)** |
+| **`ekf_node`** | `7.8–8.5%` + steady overruns | **`6.9%`**, `30.02 Hz`, 0 errors | **`5.9%`**, startup-only overruns (`11–14s` after nav restart), 0 steady-state errors |
+| **UDP In / Out (`nstat`)** | `+14,745` / `+4,110 /s` | `+5,620` / `+3,115 /s` | **`+4,069` / `+1,496 /s`** (**~3.6× / 2.7× lower**) |
+| **UDP Multicast In / Out** | `+341` / `+400 /s` | `+189` / `+227 /s` | **`+138` / `+174 /s`** |
+| **`UdpRcvbufErrors`** | `2,005` total | **`0 (+0/s)`** | `18,942` startup burst, **`+0/s` steady** |
+| **Memory Used / Avail** | `1.3–1.4` / `2.5–2.6 GiB` | `1.0` / `2.9 GiB` | `1.2` / `2.6 GiB` |
+| **Temp / Throttling** | `58.4°C`, `0x0` | `47.2°C`, `0x0` | `57.6°C`, `0x0` |
+
+> **Field Result:** Restarting `mission_nav_session` and launching `radiation_session` worked smoothly together; active Nav2 goals (`controller_server` + BT recovery + goal completion) executed inside `/nav2_container` without steady-state `ekf_node` timing misses or UDP buffer drops.
+
+---
+
 ## 2. Optimization Roadmap Summary
 
 | Area | Item | Impact | Risk | Status |
 | :--- | :--- | :---: | :---: | :--- |
-| **Micro-ROS Agent** | Remove `-v4` verbose serial logging in `start_robot.sh` | Low-Med | Very Low | **Done (Repo)** |
-| **Nav2 Bringup** | Own `navigation_launch.py` in `smart_nav` with `use_composition`, `use_docking`, `use_route` flags | **High** | Low-Med | **Done (Local Verified; Pi Check Pending)** |
+| **Micro-ROS Agent** | Remove `-v4` verbose serial logging in `start_robot.sh` | Low-Med | Very Low | **Done & Pi-Verified** |
+| **Nav2 Bringup** | Own `navigation_launch.py` in `smart_nav` with `use_composition`, `use_docking`, `use_route` flags | **High** | Low-Med | **Done & Pi-Verified** |
 | **Nav2 Config** | Fix `planner_server` inflation warning vs non-circular footprint; audit `controller_server` checker/verbose warnings | Med | Low | **Planned** |
 | **Nav2 Bond** | Tune `bond_heartbeat_period` / `bond_timeout` after measuring composed Nav2 `/bond` load | Med | Low-Med | **Planned** |
 | **ESP32 Firmware + EKF** | Decouple 100 Hz PID/Ramp from ~50 Hz ROS publish; fix `Ramp.h` unused `dt`; re-test `ekf_node` 30 Hz overrun | **High** | Med | **Planned** |
@@ -72,16 +97,15 @@ This document records baseline hardware profiling from **Raspberry Pi 5** (captu
 ## 3. Detailed Optimization Notes
 
 ### A. Navigation Stack (`smart_nav`)
-* **Done (Local PC Verified; Raspberry Pi 5 Field Verification Pending):**
+* **Done & Verified on Local PC + Raspberry Pi 5:**
   * Copied Jazzy [`navigation_launch.py`](../smart_nav/launch/navigation_launch.py) into `smart_nav` and wired it into [`bringup_mapping.launch.py`](../smart_nav/launch/bringup_mapping.launch.py) and [`bringup_lifelong.launch.py`](../smart_nav/launch/bringup_lifelong.launch.py).
   * Added `use_docking` (default `False`) and `use_route` (default `False`) flags that simultaneously skip launching `opennav_docking` / `nav2_route` AND remove `'docking_server'` / `'route_server'` from `lifecycle_manager_navigation`'s `node_names` list (avoiding lifecycle manager startup hangs while keeping `nav2_params.yaml` intact for future activation).
   * Added `use_composition` (default `True`) + `create_container` + `container_name` (running `rclcpp_components/component_container_isolated` named `nav2_container`), collapsing up to 11 separate Nav2 OS processes into a single container process while keeping every ROS node name, parameter service, costmap service, and action identical. Loaded `lifecycle_manager_navigation` first inside `nav2_container` so `rcl preshutdown` disarms bond supervision before the servers tear down (eliminating false 4 s bond failures and avoiding `SIGINT` -> `SIGTERM` escalation).
   * **Compatibility note (`smart_sandbox`):** [`block2b_logger.py`](../smart_sandbox/smart_sandbox/block2b_logger.py#L271-L334) discovers Nav2 processes by per-server executable name (`controller_server`, `planner_server`, ..., `route_server`). When `use_route:=false` or `use_composition:=true`, missing process names safely fall back to `0.0`, though composed runs would need `component_container_isolated` tracking if per-process CPU logging is needed in sandbox benchmarks.
-  * **Compatibility note (`mission_manager`):** [`mission_manager.py`](../smart_control/smart_control/mission_manager.py) manages `mission_nav_session` and `radiation_session` as independent `tmux` sessions and interacts via ROS topics/services/parameters (`set_speed`, `clear_costmap`, `save_map`, `rad_on`/`rad_off`), so composed Nav2 requires zero changes to `mission_manager.py`.
-* **Next Checks on Pi 5:**
-  1. Verify CPU, context switches/s, and RSS delta with `use_composition:=true use_docking:=false use_route:=false` vs the baseline above.
-  2. Investigate `[planner_server] [ERROR] Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities...` in [`nav2_params.yaml`](../smart_nav/config/nav2_params.yaml) (`global_costmap.inflation_layer.inflation_radius` vs footprint circumradius in `SmacPlanner2D`).
-  3. Clean up `[controller_server] [WARN] Parameter controller_server.verbose not found` / `No goal/progress checker specified` and inspect `/bond` frequency once composed before adjusting `bond_heartbeat_period`.
+  * **Compatibility note (`mission_manager`):** [`mission_manager.py`](../smart_control/smart_control/mission_manager.py) manages `mission_nav_session` and `radiation_session` as independent `tmux` sessions and interacts via ROS topics/services/parameters (`set_speed`, `clear_costmap`, `save_map`, `rad_on`/`rad_off`), so composed Nav2 requires zero changes to `mission_manager.py`. (Minor housekeeping note: `Popen(['tmux', 'new-session', ...])` leaves 1 harmless `[tmux: client] <defunct>` zombie entry until `mission_manager` exits.)
+* **Next Cleanups:**
+  1. Investigate `[planner_server] [ERROR] Inflation layer either not found or inflation is not set sufficiently for optimized non-circular collision checking capabilities...` in [`nav2_params.yaml`](../smart_nav/config/nav2_params.yaml) (`global_costmap.inflation_layer.inflation_radius` vs footprint circumradius in `SmacPlanner2D`).
+  2. Clean up `[controller_server] [WARN] Parameter controller_server.verbose not found` / `No goal/progress checker specified` and inspect whether `bond_heartbeat_period` still needs tuning inside `nav2_container` (`160 Hz` intra-process vs `~199 Hz` multi-process previously).
 
 ### B. ESP32-S3 Firmware (`ugv_tracked_firmware`) & `ekf_node` Pipeline
 * **Removed `-v4`:** Dropped `-v4` from `micro_ros_agent serial --dev /dev/esp32s3` in [`start_robot.sh`](autostart/start_robot.sh#L52) to cut serial/stdout logging pressure during `91–92 Hz` bursts.
