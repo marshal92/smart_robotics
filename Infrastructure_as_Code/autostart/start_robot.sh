@@ -42,14 +42,21 @@ ZENOH_CMD="zenoh-bridge-dds -l tcp/0.0.0.0:7447 --no-multicast-scouting \
 \
 --allow '^rt/rosout$'"
 
+setup_microros_pane() {
+    local target="$1"
+    local dev_path="$2"
+    local extra_args="${3:-}"
+    local agent_cmd="while true; do stty -F $dev_path -hupcl 2>/dev/null || true; ros2 run micro_ros_agent micro_ros_agent serial --dev $dev_path $extra_args; sleep 2; done"
+    tmux send-keys -t "$target" "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI=$CYCLONE_ESCAPED" C-m
+    tmux send-keys -t "$target" "$agent_cmd" C-m
+}
+
 tmux kill-session -t $SESSION 2>/dev/null
 tmux new-session -d -s $SESSION
 
-# Window 0: Persistent ESP32-S3 micro-ROS agent over Native USB
+# Window 0: Persistent ESP32-S3 micro-ROS agent over Native USB (Base)
 tmux rename-window -t $SESSION:0 'MicroROS'
-tmux send-keys -t $SESSION:0 "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI=$CYCLONE_ESCAPED" C-m
-tmux send-keys -t $SESSION:0 'stty -F /dev/esp32s3 -hupcl' C-m
-tmux send-keys -t $SESSION:0 'while true; do ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/esp32s3; sleep 2; done' C-m
+setup_microros_pane "$SESSION:0" "/dev/esp32s3"
 
 # Window 1: Hardware and Control Infrastructure
 tmux new-window -t $SESSION:1 -n 'Hardware'
@@ -62,6 +69,13 @@ tmux send-keys -t $SESSION:1 "ros2 launch smart_master real_master.launch.py use
 tmux new-window -t $SESSION:2 -n 'Zenoh_Bridge'
 tmux send-keys -t $SESSION:2 "export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp CYCLONEDDS_URI=$CYCLONE_ESCAPED" C-m
 tmux send-keys -t $SESSION:2 "$ZENOH_CMD" C-m
+
+# Window 3 (optional): Persistent ESP32 micro-ROS agent for physical manipulator
+USE_ARM_LOWER=$(printf '%s' "$USE_ARM" | tr '[:upper:]' '[:lower:]')
+if [ "$USE_ARM_LOWER" = "true" ]; then
+    tmux new-window -t $SESSION:3 -n 'MicroROS_Arm'
+    setup_microros_pane "$SESSION:MicroROS_Arm" "/dev/esp32" "-b 115200"
+fi
 
 echo "Robot started in background (use_arm=$USE_ARM)!"
 echo "Zenoh Bridge listening on port 7447"

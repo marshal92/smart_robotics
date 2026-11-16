@@ -12,10 +12,9 @@
       <div class="mission-groups">
         
         <!-- Core Controls (No heading) -->
-        <div class="small-grid" style="margin-bottom: 25px;">
+        <div class="small-grid top-core-grid" style="margin-bottom: 20px;">
           <button class="cmd-btn c-red" @click="pubSys('stop')">TERMINATE <span>Kill Nav/SLAM</span></button>
           <button class="cmd-btn border-btn b-orange" @click="pubOperator('RESUME')">RESUME <span>Unlock system</span></button>
-          <button class="cmd-btn border-btn b-orange" @click="pubSmartCommand('nav', 'recover_localization')">Recovery <span>Recover 213</span></button>
         </div>
 
         <!-- Group 2: Maps & Scenarios -->
@@ -31,9 +30,7 @@
           <!-- Dropdown Map Selector + Load Button -->
           <div class="scenario-selector-row">
             <select v-model="selectedScenarioMap" class="scenario-select" :style="{ flex: selectedScenarioMap === 'custom' ? '0 0 140px' : '1' }">
-              <option value="start_213">Room 213</option>
-              <option value="start_kitchen">Kitchen</option>
-              <option value="start_shelter_zero">Shelter Zero</option>
+              <option v-for="m in MAP_PRESETS" :key="m.loadCmd" :value="m.loadCmd">{{ m.label }}</option>
               <option value="custom">Custom Map...</option>
             </select>
             <input 
@@ -60,6 +57,25 @@
             />
             <button class="cmd-btn border-btn b-blue scenario-action-btn" @click="saveCustomMap">
               Save Map
+            </button>
+          </div>
+
+          <!-- Recovery Localization Row (Styled identically to Load/Save Map) -->
+          <div class="scenario-selector-row">
+            <select v-model="selectedRecoveryMap" class="scenario-select" :style="{ flex: selectedRecoveryMap === 'custom' ? '0 0 140px' : '1' }">
+              <option v-for="m in MAP_PRESETS" :key="m.mapName" :value="m.mapName">{{ m.label }}</option>
+              <option value="custom">Custom Map...</option>
+            </select>
+            <input
+              v-if="selectedRecoveryMap === 'custom'"
+              type="text"
+              v-model="customMapNameRecovery"
+              placeholder="Custom map name"
+              class="scenario-input"
+              @keyup.enter="triggerRecovery"
+            />
+            <button class="cmd-btn border-btn b-orange scenario-action-btn" @click="triggerRecovery">
+              Recovery
             </button>
           </div>
         </div>
@@ -173,7 +189,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { pubSmartCommand, pubTwist, pubBool } from '../../services/rosConnection'
 import { stopTeleopLoop } from '../../services/teleopCore'
 import { useRosStore } from '../../stores/rosStore'
@@ -215,18 +231,42 @@ const toggleVirtGeiger = () => {
   pubSys(next ? 'rad_geiger_on' : 'rad_geiger_off')
 }
 
+const MAP_PRESETS = [
+  { loadCmd: 'start_213', mapName: '213_map', label: 'Room 213' },
+  { loadCmd: 'start_kitchen', mapName: 'kitchen_map', label: 'Kitchen' },
+  { loadCmd: 'start_shelter_zero', mapName: 'shelter_012.7', label: 'Shelter Zero' },
+]
+
 const mapNameSave = ref('')
 const selectedScenarioMap = ref('start_213')
 const customMapNameLoad = ref('')
+const selectedRecoveryMap = ref('213_map')
+const customMapNameRecovery = ref('')
 const selectedRadMap = ref('radiation_map.npy')
+
+watch(selectedScenarioMap, (cmd) => {
+  const preset = MAP_PRESETS.find((m) => m.loadCmd === cmd)
+  selectedRecoveryMap.value = preset ? preset.mapName : 'custom'
+})
 
 const loadSelectedScenario = () => {
   if (selectedScenarioMap.value === 'custom') {
-    if (customMapNameLoad.value.trim()) {
-      pubSmartCommand('system', `start:lifelong:${customMapNameLoad.value.trim()}`)
+    const customName = customMapNameLoad.value.trim()
+    if (customName) {
+      customMapNameRecovery.value = customName
+      pubSmartCommand('system', `start:lifelong:${customName}`)
     }
   } else if (selectedScenarioMap.value) {
     pubSys(selectedScenarioMap.value)
+  }
+}
+
+const triggerRecovery = () => {
+  const mapName = selectedRecoveryMap.value === 'custom'
+    ? customMapNameRecovery.value.trim()
+    : selectedRecoveryMap.value
+  if (mapName) {
+    pubSmartCommand('nav', 'recover_localization', { map: mapName })
   }
 }
 
@@ -417,6 +457,9 @@ const stopBase = () => {
   display: grid; 
   grid-template-columns: repeat(4, 1fr); 
   gap: 6px; 
+}
+.small-grid.top-core-grid {
+  grid-template-columns: repeat(2, 1fr);
 }
 .small-grid .cmd-btn { 
   padding: 6px 4px; 

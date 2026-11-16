@@ -18,14 +18,20 @@ TODO: Read the active map name dynamically from SmartTelemetry instead of hardco
 """
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, qos_profile_sensor_data
 
+import json
 import numpy as np
 import math
 import threading
 import time
 import os
 import yaml
+
+try:
+    from ament_index_python.packages import get_package_share_directory
+except ImportError:
+    get_package_share_directory = None
 
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseWithCovarianceStamped, Pose2D
@@ -73,7 +79,7 @@ class RecoveryRelocalizer(Node):
         self.create_subscription(
             SmartCommand, '/smart_command', self._command_cb, qos)
         self.create_subscription(
-            LaserScan, '/scan', self._scan_cb, 10)
+            LaserScan, '/scan', self._scan_cb, qos_profile_sensor_data)
 
         # === Publications ===
         self.cmd_pub = self.create_publisher(SmartCommand, '/smart_command', 10)
@@ -97,7 +103,7 @@ class RecoveryRelocalizer(Node):
         self.latest_scan = msg
 
     def _command_cb(self, msg):
-        if msg.target_system != 'nav' or msg.command != 'recover_localization':
+        if msg.target_system != 'nav' or msg.command.strip().lower() != 'recover_localization':
             return
 
         with self._lock:
@@ -107,14 +113,16 @@ class RecoveryRelocalizer(Node):
             self.is_recovering = True
 
         # Read map name from payload if provided, otherwise fall back to default
-        map_name = self.default_map
+        raw_map_name = self.default_map
         if msg.payload_json:
             try:
-                import json
                 payload = json.loads(msg.payload_json)
-                map_name = payload.get('map', self.default_map)
-            except Exception:
-                pass
+                if isinstance(payload, dict):
+                    raw_map_name = payload.get('map') or payload.get('map_name') or self.default_map
+            except Exception as exc:
+                self.get_logger().warn(f"Invalid payload_json in recover_localization ({exc}); using default map.")
+
+        map_name = self._normalize_map_name(str(raw_map_name))
 
         self.get_logger().warn(
             "╔══════════════════════════════════════════╗")
@@ -129,12 +137,74 @@ class RecoveryRelocalizer(Node):
             target=self._run_recovery, args=(map_name,), daemon=True
         ).start()
 
+    @staticmethod
+    def _normalize_map_name(raw_name: str) -> str:
+        name = raw_name.strip()
+        for ext in ('.posegraph', '.yaml', '.pgm', '.data'):
+            if name.endswith(ext):
+                name = name[:-len(ext)]
+                break
+        aliases = {
+            '213': '213_map',
+            'start_213': '213_map',
+            'start_kitchen': 'kitchen_map',
+            'start_shelter_zero': 'shelter_012.7',
+            'start_shelter': 'shelter_map',
+        }
+        return aliases.get(name.lower(), name)
+
+    def _find_map_base(self, map_name: str):
+        candidate_dirs = []
+        for d in (
+            os.path.expanduser(str(self.maps_dir)),
+            os.path.expanduser('~/.local/share/smart_robotics/nav_maps'),
+        ):
+            if d and d not in candidate_dirs:
+                candidate_dirs.append(d)
+
+        if get_package_share_directory is not None:
+            try:
+                share_maps = os.path.join(get_package_share_directory('smart_nav'), 'maps')
+                if share_maps not in candidate_dirs:
+                    candidate_dirs.append(share_maps)
+            except Exception:
+                pass
+
+        for directory in candidate_dirs:
+            yaml_path = os.path.join(directory, f"{map_name}.yaml")
+            if os.path.exists(yaml_path):
+                return os.path.join(directory, map_name)
+
+        self.get_logger().error(
+            f"Map '{map_name}.yaml' not found in searched dirs: {candidate_dirs}")
+        return None
+
     # ================================================================
     #  Main Recovery Pipeline
     # ================================================================
 
     def _run_recovery(self, map_name):
+        slam_paused = False
         try:
+            # --- 0. Verify map files & SLAM Toolbox availability before work ---
+            map_base = self._find_map_base(map_name)
+            if map_base is None:
+                return
+            posegraph_file = f"{map_base}.posegraph"
+            if not os.path.exists(posegraph_file):
+                self.get_logger().error(
+                    f"Posegraph not found: {posegraph_file}. Cannot run SLAM recovery.")
+                return
+
+            if not self.deserialize_cli.wait_for_service(timeout_sec=1.5):
+                self.get_logger().error(
+                    "Service /slam_toolbox/deserialize_map is not available! Start a map mission first.")
+                return
+
+            if self.latest_scan is None:
+                self.get_logger().error("No scan data available yet on /scan! Aborting.")
+                return
+
             # --- 1. Stop robot ---
             self.get_logger().info("[1/6] Stopping robot...")
             self.cmd_pub.publish(
@@ -143,16 +213,15 @@ class RecoveryRelocalizer(Node):
 
             # --- 2. Pause SLAM (toggle) ---
             self.get_logger().info("[2/6] Pausing SLAM...")
-            self._toggle_slam_pause()
-            time.sleep(0.3)
+            slam_paused = self._toggle_slam_pause()
+            time.sleep(0.2)
 
             # --- 3. Load PGM map from disk ---
             self.get_logger().info("[3/6] Loading reference map from disk...")
-            map_data = self._load_pgm_map(map_name)
+            map_data = self._load_pgm_map(map_base)
             if map_data is None:
                 self.get_logger().error(
                     "Failed to load map! Aborting recovery.")
-                self._toggle_slam_pause()
                 return
 
             wall_mask, free_mask, res, ox, oy, w, h = map_data
@@ -161,14 +230,12 @@ class RecoveryRelocalizer(Node):
             self.get_logger().info("[4/6] Acquiring laser scan...")
             if self.latest_scan is None:
                 self.get_logger().error("No scan data available! Aborting.")
-                self._toggle_slam_pause()
                 return
 
             lx, ly = self._scan_to_points(self.latest_scan)
             if len(lx) < 10:
                 self.get_logger().error(
                     f"Too few valid scan points ({len(lx)}). Aborting.")
-                self._toggle_slam_pause()
                 return
 
             self.get_logger().info(
@@ -187,7 +254,6 @@ class RecoveryRelocalizer(Node):
             if score < 0:
                 self.get_logger().error(
                     "No valid position found on map! Aborting.")
-                self._toggle_slam_pause()
                 return
 
             pct = (score / n_pts * 100.0) if n_pts > 0 else 0.0
@@ -204,15 +270,13 @@ class RecoveryRelocalizer(Node):
             # --- 6. Hot-reload posegraph ---
             self.get_logger().info(
                 "[6/6] Hot-reloading posegraph with found position...")
-            self._reload_posegraph(map_name, bx, by, byaw)
-            time.sleep(1.5)
+            reloaded = self._reload_posegraph(map_base, bx, by, byaw)
+            if not reloaded:
+                self.get_logger().error("Posegraph deserialization failed or timed out!")
 
             # Safeguard: also publish via /initialpose
             self._publish_initialpose(bx, by, byaw)
-            time.sleep(0.5)
-
-            # Resume SLAM (toggle back)
-            self._toggle_slam_pause()
+            time.sleep(0.3)
 
             self.get_logger().info(
                 "╔══════════════════════════════════════════╗")
@@ -228,12 +292,12 @@ class RecoveryRelocalizer(Node):
             self.get_logger().error(f"Recovery failed with exception: {e}")
             import traceback
             self.get_logger().error(traceback.format_exc())
-            # Try unpausing SLAM even after an error
-            try:
-                self._toggle_slam_pause()
-            except Exception:
-                pass
         finally:
+            if slam_paused:
+                try:
+                    self._toggle_slam_pause()
+                except Exception:
+                    pass
             with self._lock:
                 self.is_recovering = False
 
@@ -241,20 +305,15 @@ class RecoveryRelocalizer(Node):
     #  Map Loading from Disk (PGM + YAML)
     # ================================================================
 
-    def _load_pgm_map(self, map_name):
+    def _load_pgm_map(self, map_base):
         """
-        Load PGM + YAML map files.
+        Load PGM + YAML map files from a base path (without extension).
         Returns (wall_mask, free_mask, resolution, origin_x, origin_y, w, h)
         or None on failure.
-        
-        wall_mask: float32 ndarray, 1.0 = wall (used for scoring)
-        free_mask: bool ndarray, True = free space (candidate search grid)
-        
-        Arrays follow OccupancyGrid coordinates:
-          row 0 = bottom of map (origin_y),
-          col 0 = left edge (origin_x).
         """
-        yaml_path = os.path.join(self.maps_dir, f"{map_name}.yaml")
+        map_dir = os.path.dirname(map_base)
+        map_name = os.path.basename(map_base)
+        yaml_path = f"{map_base}.yaml"
         if not os.path.exists(yaml_path):
             self.get_logger().error(f"YAML not found: {yaml_path}")
             return None
@@ -271,9 +330,9 @@ class RecoveryRelocalizer(Node):
 
         # Locate PGM: prefer YAML image entry, then fall back to {map_name}.pgm
         pgm_name = meta.get('image', f'{map_name}.pgm')
-        pgm_path = os.path.join(self.maps_dir, pgm_name)
+        pgm_path = pgm_name if os.path.isabs(pgm_name) else os.path.join(map_dir, pgm_name)
         if not os.path.exists(pgm_path):
-            pgm_path = os.path.join(self.maps_dir, f'{map_name}.pgm')
+            pgm_path = f"{map_base}.pgm"
         if not os.path.exists(pgm_path):
             self.get_logger().error(f"PGM not found: {pgm_path}")
             return None
@@ -385,6 +444,15 @@ class RecoveryRelocalizer(Node):
         step_cells = max(1, int(self.coarse_step / res))
         yaw_steps = np.arange(0, 2 * np.pi, self.coarse_angle_step)
 
+        # Precompute rotated scan offsets in grid cell units once per yaw angle
+        coarse_rotations = []
+        for yaw in yaw_steps:
+            cos_y = math.cos(yaw)
+            sin_y = math.sin(yaw)
+            rx_cells = (lx * cos_y - ly * sin_y) / res
+            ry_cells = (lx * sin_y + ly * cos_y) / res
+            coarse_rotations.append((float(yaw), rx_cells, ry_cells))
+
         best_score = -1.0
         best_pose = (0.0, 0.0, 0.0)
         candidates = []  # (score, x, y, yaw) for fine pass
@@ -396,20 +464,25 @@ class RecoveryRelocalizer(Node):
                 if not free_mask[r, c]:
                     continue
 
-                wx = ox + (c + 0.5) * res
-                wy = oy + (r + 0.5) * res
+                cx_base = c + 0.5
+                cy_base = r + 0.5
+                wx = ox + cx_base * res
+                wy = oy + cy_base * res
 
-                for yaw in yaw_steps:
-                    s = self._score_pose(
-                        wx, wy, yaw, lx, ly,
-                        wall_mask, res, ox, oy, w, h)
+                for yaw, rx_cells, ry_cells in coarse_rotations:
+                    mx = (cx_base + rx_cells).astype(np.int32)
+                    my = (cy_base + ry_cells).astype(np.int32)
+                    valid = (mx >= 0) & (mx < w) & (my >= 0) & (my < h)
+                    if not np.any(valid):
+                        s = -1.0
+                    else:
+                        s = float(np.sum(wall_mask[my[valid], mx[valid]]))
                     n_checked += 1
 
                     if s > best_score:
                         best_score = s
                         best_pose = (wx, wy, yaw)
 
-                    # Candidates for refinement
                     if s > n_pts * 0.2:
                         candidates.append((s, wx, wy, yaw))
 
@@ -445,79 +518,80 @@ class RecoveryRelocalizer(Node):
             self.fine_angle_step)
 
         for _, cx, cy, cyaw in unique:
-            for dx in np.arange(-radius, radius + 1e-6, self.fine_step):
-                for dy in np.arange(-radius, radius + 1e-6, self.fine_step):
-                    for dyaw in fine_yaws:
-                        s = self._score_pose(
-                            cx + dx, cy + dy, cyaw + dyaw,
-                            lx, ly, wall_mask, res, ox, oy, w, h)
+            for dyaw in fine_yaws:
+                yaw_cand = cyaw + float(dyaw)
+                cos_y = math.cos(yaw_cand)
+                sin_y = math.sin(yaw_cand)
+                rx_world = lx * cos_y - ly * sin_y
+                ry_world = lx * sin_y + ly * cos_y
+                for dx in np.arange(-radius, radius + 1e-6, self.fine_step):
+                    for dy in np.arange(-radius, radius + 1e-6, self.fine_step):
+                        s = self._score_rotated(
+                            cx + float(dx), cy + float(dy),
+                            rx_world, ry_world, wall_mask, res, ox, oy, w, h)
                         if s > best_score:
                             best_score = s
-                            best_pose = (cx + dx, cy + dy, cyaw + dyaw)
+                            best_pose = (cx + float(dx), cy + float(dy), yaw_cand)
 
         return (*best_pose, best_score, n_pts)
 
-    def _score_pose(self, wx, wy, yaw, lx, ly,
-                    wall_mask, res, ox, oy, w, h):
-        """Hypothesis score: sum of wall mask values hit by projected scan points."""
-        cos_y = math.cos(yaw)
-        sin_y = math.sin(yaw)
-
-        # Rotate + translate point cloud into world coordinates
-        gx = wx + (lx * cos_y - ly * sin_y)
-        gy = wy + (lx * sin_y + ly * cos_y)
-
-        # World -> map indices
-        mx = ((gx - ox) / res).astype(np.int32)
-        my = ((gy - oy) / res).astype(np.int32)
-
-        # Bounds check
+    @staticmethod
+    def _score_rotated(wx, wy, rx, ry, wall_mask, res, ox, oy, w, h):
+        """Hypothesis score from pre-rotated scan offsets."""
+        mx = ((wx + rx - ox) / res).astype(np.int32)
+        my = ((wy + ry - oy) / res).astype(np.int32)
         valid = (mx >= 0) & (mx < w) & (my >= 0) & (my < h)
-        n_valid = np.count_nonzero(valid)
-        if n_valid == 0:
+        if not np.any(valid):
             return -1.0
-
         return float(np.sum(wall_mask[my[valid], mx[valid]]))
 
     # ================================================================
     #  SLAM Toolbox Control
     # ================================================================
 
-    def _toggle_slam_pause(self):
+    def _call_service_sync(self, client, req, wait_srv_s=2.0, call_timeout_s=5.0):
+        if not client.wait_for_service(timeout_sec=wait_srv_s):
+            return False, None
+        done = threading.Event()
+        fut = client.call_async(req)
+        fut.add_done_callback(lambda _: done.set())
+        if not done.wait(timeout=call_timeout_s):
+            return False, None
+        try:
+            return True, fut.result()
+        except Exception:
+            return False, None
+
+    def _toggle_slam_pause(self) -> bool:
         """Toggle SLAM pause (same service as mission_manager)."""
-        if not self.pause_cli.wait_for_service(timeout_sec=2.0):
+        ok, _ = self._call_service_sync(
+            self.pause_cli, Pause.Request(), wait_srv_s=2.0, call_timeout_s=3.0)
+        if not ok:
             self.get_logger().warn(
                 "SLAM pause service not available! Skipping.")
-            return
-        self.pause_cli.call_async(Pause.Request())
+            return False
         self.get_logger().info("  SLAM pause toggled")
+        return True
 
-    def _reload_posegraph(self, map_name, x, y, yaw):
+    def _reload_posegraph(self, map_base, x, y, yaw) -> bool:
         """
         Hot-reload a clean posegraph into the running SLAM Toolbox instance
         at the recovered pose.
         Does NOT restart the node or touch tmux.
         """
-        if not self.deserialize_cli.wait_for_service(timeout_sec=3.0):
-            self.get_logger().error(
-                "DeserializePoseGraph service not available!")
-            return
-
-        # Path without extension — SLAM Toolbox appends .posegraph/.data automatically
-        posegraph_path = os.path.join(self.maps_dir, map_name)
-
         req = DeserializePoseGraph.Request()
-        req.filename = posegraph_path
+        req.filename = map_base
         req.match_type = 3  # LOCALIZE_AT_POSE
         req.initial_pose = Pose2D(x=x, y=y, theta=yaw)
 
-        self.get_logger().info(
-            f"  Deserializing: {posegraph_path}")
+        self.get_logger().info(f"  Deserializing: {map_base}")
         self.get_logger().info(
             f"  Initial pose: x={x:.3f}, y={y:.3f}, "
             f"theta={math.degrees(yaw):.1f}°")
 
-        self.deserialize_cli.call_async(req)
+        ok, _ = self._call_service_sync(
+            self.deserialize_cli, req, wait_srv_s=3.0, call_timeout_s=8.0)
+        return ok
 
     def _publish_initialpose(self, x, y, yaw):
         """Also publish pose to /initialpose as a fallback safeguard."""

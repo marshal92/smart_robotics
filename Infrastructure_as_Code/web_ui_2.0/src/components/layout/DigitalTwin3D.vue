@@ -1,7 +1,12 @@
 <template>
-  <div ref="wrapper" class="dt-wrapper">
+  <div ref="wrapper" :class="['dt-wrapper', { 'is-fullscreen': isFullscreen }]">
     <!-- absolute inset-0 prevents the canvas from stretching the parent -->
     <div id="viewer3d" :class="['dt-viewer', { 'is-nav-mode': isNavMode }]"></div>
+
+    <!-- Top Telemetry Overlay (shown when 3D view is fullscreen) -->
+    <div v-if="isFullscreen" class="dt-fs-telemetry">
+      <TelemetryHUD />
+    </div>
     
     <!-- Center & Follow Camera on Robot Button -->
     <button
@@ -20,7 +25,12 @@
     </button>
 
     <!-- Fullscreen Button -->
-    <button class="fullscreen-btn" @click="toggleFullscreen" title="Fullscreen">⛶</button>
+    <button
+      class="fullscreen-btn"
+      :class="{ 'is-active': isFullscreen }"
+      @click="toggleFullscreen"
+      :title="isFullscreen ? 'Exit 3D Fullscreen' : '3D Fullscreen'"
+    >⛶</button>
     
     <!-- Floating Navigation Goal Target Button (Right side over 3D canvas) -->
     <button 
@@ -191,6 +201,7 @@ import { onMounted, watch, ref, onBeforeUnmount } from 'vue'
 import { useRosStore } from '../../stores/rosStore'
 import { getRosInstance, pubSmartCommand } from '../../services/rosConnection'
 import NavPopup from './NavPopup.vue'
+import TelemetryHUD from './TelemetryHUD.vue'
 import * as ROSLIB from 'roslib'
 import * as THREE from 'three'
 import { STLLoader } from 'three/addons/loaders/STLLoader.js'
@@ -218,18 +229,28 @@ const showSpeedMenu = ref(false)
 const showNavPopup = ref(false)
 const showCam = ref(false)
 const wrapper = ref(null)
+const isFullscreen = ref(false)
 const robotCoords = ref(null)
 let lastFollowedTarget = null
 
-const toggleFullscreen = () => {
-  if (!document.fullscreenElement) {
-    if (wrapper.value.requestFullscreen) {
-      wrapper.value.requestFullscreen()
+const syncFullscreenState = () => {
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+  isFullscreen.value = Boolean(wrapper.value && fsEl === wrapper.value)
+  window.dispatchEvent(new Event('resize'))
+}
+
+const toggleFullscreen = async () => {
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+  try {
+    if (!fsEl) {
+      const req = wrapper.value?.requestFullscreen || wrapper.value?.webkitRequestFullscreen
+      if (req) await req.call(wrapper.value)
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen
+      if (exit) await exit.call(document)
     }
-  } else {
-    if (document.exitFullscreen) {
-      document.exitFullscreen()
-    }
+  } catch {
+    // Ignore browser fullscreen gesture rejections
   }
 }
 
@@ -1016,7 +1037,14 @@ function connectSceneData() {
   viewerInitialized.value = true
 }
 
+onMounted(() => {
+  document.addEventListener('fullscreenchange', syncFullscreenState)
+  document.addEventListener('webkitfullscreenchange', syncFullscreenState)
+})
+
 onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', syncFullscreenState)
+  document.removeEventListener('webkitfullscreenchange', syncFullscreenState)
   unregisterCameraGamepad?.()
   unregisterCameraGamepad = null
   if (themeChangedHandler) {
@@ -1098,6 +1126,35 @@ onBeforeUnmount(() => {
 .center-cam-btn.is-active:hover {
   background: rgba(37, 99, 235, 0.42);
   border-color: var(--accent);
+}
+.fullscreen-btn.is-active {
+  background: rgba(37, 99, 235, 0.28);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.dt-fs-telemetry {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 140px);
+  background: var(--dt-panel-bg);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 10px;
+  z-index: 95;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dt-fs-telemetry::-webkit-scrollbar {
+  display: none;
+}
+.dt-wrapper.is-fullscreen .cam-popup {
+  top: 44px;
+}
+.dt-wrapper.is-fullscreen .dt-nav-hint {
+  top: 44px;
 }
 
 .dt-viewer {

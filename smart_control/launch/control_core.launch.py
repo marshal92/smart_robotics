@@ -69,7 +69,8 @@ def generate_launch_description():
         package='smart_control',
         executable='recovery_relocalizer',
         name='recovery_relocalizer',
-        output='screen'
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}]
     )
 
     return LaunchDescription([

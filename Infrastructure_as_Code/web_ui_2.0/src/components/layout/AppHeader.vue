@@ -12,6 +12,17 @@
 
     <div class="header-right">
       <ConnectionBox />
+      <button
+        v-if="canBrowserFullscreen"
+        type="button"
+        class="btn-browser-fs"
+        :class="{ 'is-active': isBrowserFullscreen }"
+        @click="toggleBrowserFullscreen"
+        :title="isBrowserFullscreen ? 'Exit Browser Fullscreen' : 'Browser Fullscreen'"
+        aria-label="Toggle Browser Fullscreen"
+      >
+        {{ isBrowserFullscreen ? '✕' : '⛶' }}
+      </button>
       <button class="estop-btn" @click="handleNavStop" title="Cancel Navigation & Halt Movement">
         🛑 STOP
       </button>
@@ -20,12 +31,43 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import TelemetryHUD from './TelemetryHUD.vue'
 import ConnectionBox from './ConnectionBox.vue'
 import { pubSmartCommand, pubTwist } from '../../services/rosConnection'
 
 const isLight = ref(false)
+const isBrowserFullscreen = ref(false)
+const canBrowserFullscreen =
+  typeof document !== 'undefined' &&
+  Boolean(
+    document.fullscreenEnabled ||
+    document.webkitFullscreenEnabled ||
+    document.documentElement?.requestFullscreen ||
+    document.documentElement?.webkitRequestFullscreen
+  )
+
+const syncBrowserFullscreen = () => {
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+  isBrowserFullscreen.value = fsEl === document.documentElement
+  window.dispatchEvent(new Event('resize'))
+}
+
+const toggleBrowserFullscreen = async () => {
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement
+  try {
+    if (!fsEl) {
+      const root = document.documentElement
+      const req = root.requestFullscreen || root.webkitRequestFullscreen
+      if (req) await req.call(root)
+    } else {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen
+      if (exit) await exit.call(document)
+    }
+  } catch {
+    // Ignore browser fullscreen gesture rejections
+  }
+}
 
 const toggleTheme = () => {
   isLight.value = !isLight.value
@@ -53,6 +95,13 @@ onMounted(() => {
   } else {
     applyTheme(false)
   }
+  document.addEventListener('fullscreenchange', syncBrowserFullscreen)
+  document.addEventListener('webkitfullscreenchange', syncBrowserFullscreen)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('fullscreenchange', syncBrowserFullscreen)
+  document.removeEventListener('webkitfullscreenchange', syncBrowserFullscreen)
 })
 
 const handleNavStop = () => {
@@ -116,6 +165,33 @@ const handleNavStop = () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.btn-browser-fs {
+  background: var(--bg-item);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-browser-fs:hover {
+  background: var(--bg-item-hover);
+  border-color: var(--border-focus);
+}
+.btn-browser-fs.is-active {
+  background: rgba(37, 99, 235, 0.25);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .estop-btn {
